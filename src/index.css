@@ -1,0 +1,219 @@
+@import "tailwindcss";
+
+/* Global baseline for the FastTrack UI (tailwind will handle most styling). */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+/* Keyframes mirrored from prototype (used via Tailwind arbitrary animations). */
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes lpcHolo {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes lpcPbShine {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes sup {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes drawLine {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dotbounce {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
+}
+
+/* Analytical loaders (Frame1 loadA / Frame3 loadB) — checkbox spin */
+@keyframes loaderChkSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes pathNodeIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-22px) scale(0.98);
+    filter: blur(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+/* Frame 3 milestone tiles — skeleton + stagger (mirrors fasttrack_v6 loadPath / mcard.skeleton) */
+@keyframes mcShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.milestone-tile-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(35, 35, 35, 0.65) 0%,
+    rgba(60, 60, 60, 0.78) 50%,
+    rgba(35, 35, 35, 0.65) 100%
+  );
+  background-size: 200% 100%;
+  animation: mcShimmer 1.2s linear infinite;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  pointer-events: none;
+  transform: translateY(6px);
+}
+
+.milestone-tile-skeleton .milestone-tile-inner {
+  opacity: 0;
+}
+
+.milestone-tile-reveal {
+  animation: pathNodeIn 0.42s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* Frame 1 dream salary — fill must live on the *track* pseudo-elements (not the input background). */
+input[type="range"].dream-salary-range {
+  --fill-pct: 44.444%;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[type="range"].dream-salary-range:focus {
+  outline: none;
+}
+
+input[type="range"].dream-salary-range::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    #37017b 0%,
+    #37017b var(--fill-pct),
+    rgba(0, 0, 0, 0.08) var(--fill-pct),
+    rgba(0, 0, 0, 0.08) 100%
+  );
+}
+
+input[type="range"].dream-salary-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -4.5px;
+  border-radius: 9999px;
+  border: 2px solid #37017b;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+}
+
+input[type="range"].dream-salary-range::-moz-range-track {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+input[type="range"].dream-salary-range::-moz-range-progress {
+  height: 5px;
+  border-radius: 3px;
+  background: #37017b;
+}
+
+input[type="range"].dream-salary-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  border: 2px solid #37017b;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+}
