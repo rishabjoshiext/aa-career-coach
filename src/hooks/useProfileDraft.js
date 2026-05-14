@@ -6,7 +6,7 @@ export const INITIAL_PROFILE_DRAFT = {
   phone: '',
   email: '',
   // education
-  edu: '12',
+  edu: '',
   bd10: '',
   sc10: '',
   bd12: '',

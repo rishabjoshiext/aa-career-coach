@@ -147,7 +147,7 @@ export function Frame7() {
   const anchorDisplay = collegePicks[0] || spec?.anchorUni || '—'
 
   return (
-    <section className="absolute inset-0 overflow-y-auto px-9 pb-10 pt-7">
+    <section data-scroll-top className="absolute inset-0 overflow-y-auto px-9 pb-10 pt-7">
       <div className="mx-auto max-w-[880px]">
         <div className="mb-[14px] flex flex-wrap items-center gap-[6px] text-[11px] font-[600] text-[#bbb]">
           <span className="rounded-[20px] bg-[rgba(55,1,123,.07)] px-[10px] py-[3px] text-[#37017B]">7 · Specialisation</span>

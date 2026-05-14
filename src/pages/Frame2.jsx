@@ -168,7 +168,7 @@ export function Frame2() {
   }, [selectedCard])
 
   return (
-    <section className="absolute inset-0 overflow-y-auto px-9 pb-8 pt-7">
+    <section data-scroll-top className="absolute inset-0 overflow-y-auto px-9 pb-8 pt-7">
       <div className="mx-auto max-w-[1000px]">
         <div className="mb-[18px] inline-flex items-center gap-[7px] rounded-[20px] border border-[rgba(55,1,123,.14)] bg-[rgba(55,1,123,.07)] px-[13px] py-[5px] text-[11px] font-[700] text-[#37017B]">
           <span className="h-[5px] w-[5px] rounded-full bg-[#37017B] motion-safe:animate-[blink_1.2s_infinite]" />

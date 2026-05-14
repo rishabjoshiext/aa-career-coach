@@ -149,6 +149,43 @@ const FUNCTIONAL_AREA_OPTIONS = [
   'Other',
 ]
 
+const ROLE_OPTIONS_BY_FUNC = {
+  Finance: ['Finance Analyst', 'Accounts Executive', 'Finance Manager', 'FP&A Analyst', 'Cost Accountant', 'Treasury Analyst', 'Tax Analyst', 'Finance Controller', 'CFO', 'Other'],
+  HR: ['HR Executive', 'HR Manager', 'Recruiter', 'Talent Acquisition Specialist', 'HRBP', 'Payroll Executive', 'L&D Manager', 'HR Director', 'Other'],
+  Marketing: ['Marketing Executive', 'Brand Manager', 'Content Marketer', 'Marketing Manager', 'Growth Manager', 'Campaign Manager', 'Marketing Analyst', 'CMO', 'Other'],
+  Sales: ['Sales Executive', 'Business Development Manager', 'Key Account Manager', 'Sales Manager', 'Inside Sales Executive', 'Territory Manager', 'Sales Head', 'VP Sales', 'Other'],
+  Operations: ['Operations Executive', 'Operations Manager', 'Process Associate', 'Operations Analyst', 'Logistics Coordinator', 'Plant Manager', 'COO', 'Other'],
+  IT: ['Software Developer', 'System Administrator', 'IT Support Executive', 'Network Engineer', 'Database Administrator', 'IT Manager', 'Solutions Architect', 'CTO', 'Other'],
+  Product: ['Product Analyst', 'Associate Product Manager', 'Product Manager', 'Senior Product Manager', 'Group PM', 'Director of Product', 'VP Product', 'CPO', 'Other'],
+  Strategy: ['Strategy Analyst', 'Business Analyst', 'Strategy Manager', 'Strategy Consultant', 'Corporate Strategy Lead', 'VP Strategy', 'Chief Strategy Officer', 'Other'],
+  SCM: ['Supply Chain Analyst', 'Procurement Executive', 'Logistics Executive', 'Warehouse Manager', 'Supply Chain Manager', 'Category Manager', 'VP Supply Chain', 'Other'],
+  'Customer Success': ['Customer Support Executive', 'Customer Success Manager', 'Account Manager', 'Client Relations Manager', 'CX Manager', 'VP Customer Success', 'Other'],
+  'Business Analytics': ['Data Analyst', 'Business Analyst', 'Analytics Manager', 'BI Developer', 'Insights Manager', 'Analytics Lead', 'Director Analytics', 'Other'],
+  Consulting: ['Analyst', 'Consultant', 'Senior Consultant', 'Engagement Manager', 'Associate Principal', 'Principal', 'Partner', 'Other'],
+  'Data Science': ['Data Scientist', 'ML Engineer', 'Data Analyst', 'Research Scientist', 'AI Engineer', 'Data Science Manager', 'Chief Data Officer', 'Other'],
+  'AI & ML': ['ML Engineer', 'AI Researcher', 'Data Scientist', 'NLP Engineer', 'Computer Vision Engineer', 'AI Product Manager', 'Head of AI', 'Other'],
+  'Digital Marketing': ['SEO Analyst', 'SEM Specialist', 'Social Media Manager', 'Content Strategist', 'Digital Marketing Manager', 'Performance Marketer', 'Head of Digital', 'Other'],
+  'E-commerce': ['E-commerce Executive', 'Category Manager', 'Marketplace Manager', 'E-commerce Analyst', 'E-commerce Manager', 'Growth Manager', 'VP E-commerce', 'Other'],
+  'Healthcare Management': ['Healthcare Administrator', 'Hospital Manager', 'Clinical Coordinator', 'Healthcare Consultant', 'Operations Manager', 'CEO Hospital', 'Other'],
+  'Banking & Insurance': ['Relationship Manager', 'Credit Analyst', 'Branch Manager', 'Insurance Advisor', 'Risk Analyst', 'Compliance Officer', 'VP Banking', 'Other'],
+  'Project Management': ['Project Coordinator', 'Project Manager', 'Program Manager', 'Scrum Master', 'PMO Analyst', 'Portfolio Manager', 'VP Projects', 'Other'],
+  Entrepreneurship: ['Founder', 'Co-Founder', 'Startup Consultant', 'Business Development Manager', 'Product Lead', 'CEO', 'Other'],
+  'General Management': ['Management Trainee', 'Assistant Manager', 'Manager', 'Senior Manager', 'Deputy GM', 'General Manager', 'VP', 'Director', 'Other'],
+  'Quality Management': ['Quality Analyst', 'QA Engineer', 'Quality Manager', 'Six Sigma Black Belt', 'Process Improvement Lead', 'Head of Quality', 'Other'],
+  'Retail Management': ['Retail Executive', 'Store Manager', 'Area Manager', 'Visual Merchandiser', 'Retail Operations Manager', 'Regional Manager', 'VP Retail', 'Other'],
+  'International Business': ['International Business Analyst', 'Export Manager', 'Trade Finance Manager', 'Business Development Manager', 'Country Manager', 'Global Head', 'Other'],
+  'Business Development': ['BD Executive', 'BD Manager', 'Partnerships Manager', 'Key Accounts Manager', 'Growth Manager', 'VP Business Development', 'Other'],
+  'Legal & Compliance': ['Legal Analyst', 'Compliance Officer', 'Legal Executive', 'Company Secretary', 'Legal Manager', 'General Counsel', 'Chief Legal Officer', 'Other'],
+  'Risk Management': ['Risk Analyst', 'Risk Manager', 'Credit Risk Analyst', 'Operational Risk Manager', 'Chief Risk Officer', 'Other'],
+  'Sustainability & ESG': ['CSR Executive', 'ESG Analyst', 'Sustainability Manager', 'Environment Officer', 'ESG Consultant', 'Head of Sustainability', 'Other'],
+  'UI/UX': ['UI Designer', 'UX Researcher', 'Product Designer', 'Interaction Designer', 'UX Lead', 'Design Manager', 'Chief Design Officer', 'Other'],
+  Cybersecurity: ['Security Analyst', 'Penetration Tester', 'Security Engineer', 'SOC Analyst', 'InfoSec Manager', 'CISO', 'Other'],
+  'Cloud & DevOps': ['DevOps Engineer', 'Cloud Engineer', 'Site Reliability Engineer', 'Platform Engineer', 'Cloud Architect', 'VP Engineering', 'Other'],
+  Other: ['Executive', 'Manager', 'Analyst', 'Consultant', 'Team Lead', 'Senior Executive', 'Other'],
+}
+
+const TAR_FUNC_OPTIONS = [...FUNCTIONAL_AREA_OPTIONS.slice(0, -1), 'Open / System should suggest', 'Other']
+
 function isValidTenDigitPhone(phone) {
   return /^\d{10}$/.test(String(phone ?? '').trim())
 }
@@ -188,6 +225,16 @@ export function Frame1() {
   const [funcQ, setFuncQ] = useState('')
   const [funcOpen, setFuncOpen] = useState(false)
   const funcWrapRef = useRef(null)
+
+  const [roleQ, setRoleQ] = useState('')
+  const [roleOpen, setRoleOpen] = useState(false)
+  const roleWrapRef = useRef(null)
+
+  const [tarFuncQ, setTarFuncQ] = useState('')
+  const [tarFuncOpen, setTarFuncOpen] = useState(false)
+  const tarFuncWrapRef = useRef(null)
+
+  const scrollRef = useRef(null)
   const [toDestLoading, setToDestLoading] = useState(false)
 
   const dreamSalaryClamped = useMemo(() => {
@@ -253,19 +300,68 @@ export function Frame1() {
     return () => window.removeEventListener('mousedown', onDown)
   }, [s.func])
 
+  useEffect(() => {
+    const onDown = (ev) => {
+      if (!roleWrapRef.current) return
+      if (roleWrapRef.current.contains(ev.target)) return
+      setRoleOpen(false)
+      setRoleQ(s.role || '')
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [s.role])
+
+  useEffect(() => {
+    const onDown = (ev) => {
+      if (!tarFuncWrapRef.current) return
+      if (tarFuncWrapRef.current.contains(ev.target)) return
+      setTarFuncOpen(false)
+      setTarFuncQ(s.dTarFunc || '')
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [s.dTarFunc])
+
+  // Reset role when functional area changes
+  useEffect(() => {
+    setRoleQ('')
+    setS((p) => ({ ...p, role: '' }))
+    setRoleOpen(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.func])
+
   const funcMatches = useMemo(() => {
     const q = (funcQ || '').trim().toLowerCase()
     if (!q) return FUNCTIONAL_AREA_OPTIONS
     const matched = FUNCTIONAL_AREA_OPTIONS.filter((o) => o.toLowerCase().includes(q))
-    // Requirement: if user types relevant thing show that role, else show others.
     return matched.length ? matched : FUNCTIONAL_AREA_OPTIONS
   }, [funcQ])
+
+  const roleOptions = useMemo(
+    () => ROLE_OPTIONS_BY_FUNC[s.func] || ['Executive', 'Manager', 'Analyst', 'Consultant', 'Team Lead', 'Other'],
+    [s.func],
+  )
+
+  const roleMatches = useMemo(() => {
+    const q = (roleQ || '').trim().toLowerCase()
+    if (!q) return roleOptions
+    const matched = roleOptions.filter((o) => o.toLowerCase().includes(q))
+    return matched.length ? matched : roleOptions
+  }, [roleQ, roleOptions])
+
+  const tarFuncMatches = useMemo(() => {
+    const q = (tarFuncQ || '').trim().toLowerCase()
+    if (!q) return TAR_FUNC_OPTIONS
+    const matched = TAR_FUNC_OPTIONS.filter((o) => o.toLowerCase().includes(q))
+    return matched.length ? matched : TAR_FUNC_OPTIONS
+  }, [tarFuncQ])
 
   const profileReadyForDreams = useMemo(() => {
     const p = s
     if (!String(p.name || '').trim()) return false
     if (!isValidTenDigitPhone(p.phone)) return false
     if (!isValidEmail(p.email)) return false
+    if (!p.edu) return false
     if (!p.bd10) return false
     if (!scoreValid(p.sc10, p.edScore10Mode || 'pct')) return false
     if (!p.bd12) return false
@@ -323,7 +419,7 @@ export function Frame1() {
 
   return (
     <section className="absolute inset-0 overflow-hidden">
-      <div className="absolute inset-0 overflow-y-auto px-9 pb-8 pt-7">
+      <div ref={scrollRef} data-scroll-top className="absolute inset-0 overflow-y-auto px-9 pb-8 pt-7">
         <div className="mx-auto grid max-w-[980px] grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
           <div>
             {/* Sub-flow indicator */}
@@ -715,7 +811,61 @@ export function Frame1() {
                         </div>
                         <div>
                           <Label required>Role / Designation</Label>
-                          <Input value={s.role} onChange={(e) => setS((p) => ({ ...p, role: e.target.value }))} placeholder="e.g. HR Executive" />
+                          <div ref={roleWrapRef} className="relative">
+                            <div
+                              className="min-h-[42px] rounded-[9px] border-[1.5px] border-[rgba(0,0,0,.09)] bg-white px-[11px] py-[8px]"
+                              onMouseDown={() => setRoleOpen(true)}
+                            >
+                              <input
+                                value={roleQ}
+                                onChange={(e) => {
+                                  setRoleQ(e.target.value)
+                                  setRoleOpen(true)
+                                }}
+                                onFocus={() => setRoleOpen(true)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault()
+                                    const first = roleMatches[0]
+                                    if (!first) return
+                                    setS((p) => ({ ...p, role: first }))
+                                    setRoleQ(first)
+                                    setRoleOpen(false)
+                                  }
+                                  if (e.key === 'Escape') setRoleOpen(false)
+                                }}
+                                placeholder={s.func ? 'Search or type a role…' : 'Select a function first'}
+                                disabled={!s.func}
+                                className="w-full border-0 bg-transparent px-0 py-[3px] text-[13px] outline-none placeholder:text-[#ccc] disabled:cursor-not-allowed"
+                                autoComplete="off"
+                              />
+                            </div>
+                            {roleOpen && s.func && (
+                              <div className="absolute left-0 top-[calc(100%+4px)] z-50 max-h-[220px] w-full overflow-y-auto rounded-[9px] border border-[rgba(55,1,123,.14)] bg-white p-[5px] shadow-[0_6px_24px_rgba(55,1,123,.12)]">
+                                {roleMatches.map((opt) => {
+                                  const selected = s.role === opt
+                                  return (
+                                    <button
+                                      key={opt}
+                                      type="button"
+                                      className={[
+                                        'block w-full rounded-[6px] px-[10px] py-[7px] text-left text-[12px] transition-colors',
+                                        selected ? 'bg-[rgba(55,1,123,.08)] text-[#37017B] font-[800]' : 'text-[#0C0C0C] hover:bg-[rgba(55,1,123,.07)] hover:text-[#37017B]',
+                                      ].join(' ')}
+                                      onMouseDown={(ev) => ev.preventDefault()}
+                                      onClick={() => {
+                                        setS((p) => ({ ...p, role: opt }))
+                                        setRoleQ(opt)
+                                        setRoleOpen(false)
+                                      }}
+                                    >
+                                      {opt}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div>
                           <Label required>Level</Label>
@@ -861,7 +1011,7 @@ export function Frame1() {
                 </div>
 
                 <div className="mt-[22px] flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-[10px]">
-                  <Button disabled={!profileReadyForDreams} onClick={() => profileReadyForDreams && setPanel('dreams')}>
+                  <Button disabled={!profileReadyForDreams} onClick={() => { if (profileReadyForDreams) { setPanel('dreams'); window.setTimeout(() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }), 0) } }}>
                     Continue to Aspirations →
                   </Button>
                   {!profileReadyForDreams ? (
@@ -1045,20 +1195,60 @@ export function Frame1() {
                     <div className="ml-auto text-[10.5px] text-[#bbb]">Where do you see yourself growing?</div>
                   </div>
                   <Label required>Target functional area</Label>
-                  <Select value={s.dTarFunc} onChange={(e) => setS((p) => ({ ...p, dTarFunc: e.target.value }))}>
-                    <option value="">Pick the function you want to build a career in</option>
-                    <option>Finance</option>
-                    <option>HR</option>
-                    <option>Marketing</option>
-                    <option>Sales</option>
-                    <option>Operations</option>
-                    <option>IT</option>
-                    <option>Product</option>
-                    <option>Strategy</option>
-                    <option>SCM</option>
-                    <option>Customer Success</option>
-                    <option>Open / System should suggest</option>
-                  </Select>
+                  <div ref={tarFuncWrapRef} className="relative">
+                    <div
+                      className="min-h-[42px] rounded-[9px] border-[1.5px] border-[rgba(0,0,0,.09)] bg-white px-[11px] py-[8px]"
+                      onMouseDown={() => setTarFuncOpen(true)}
+                    >
+                      <input
+                        value={tarFuncQ}
+                        onChange={(e) => {
+                          setTarFuncQ(e.target.value)
+                          setTarFuncOpen(true)
+                        }}
+                        onFocus={() => setTarFuncOpen(true)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            const first = tarFuncMatches[0]
+                            if (!first) return
+                            setS((p) => ({ ...p, dTarFunc: first }))
+                            setTarFuncQ(first)
+                            setTarFuncOpen(false)
+                          }
+                          if (e.key === 'Escape') setTarFuncOpen(false)
+                        }}
+                        placeholder={s.dTarFunc ? '' : 'Search a function…'}
+                        className="w-full border-0 bg-transparent px-0 py-[3px] text-[13px] outline-none placeholder:text-[#ccc]"
+                        autoComplete="off"
+                      />
+                    </div>
+                    {tarFuncOpen && (
+                      <div className="absolute left-0 top-[calc(100%+4px)] z-50 max-h-[220px] w-full overflow-y-auto rounded-[9px] border border-[rgba(55,1,123,.14)] bg-white p-[5px] shadow-[0_6px_24px_rgba(55,1,123,.12)]">
+                        {tarFuncMatches.map((opt) => {
+                          const selected = s.dTarFunc === opt
+                          return (
+                            <button
+                              key={opt}
+                              type="button"
+                              className={[
+                                'block w-full rounded-[6px] px-[10px] py-[7px] text-left text-[12px] transition-colors',
+                                selected ? 'bg-[rgba(55,1,123,.08)] text-[#37017B] font-[800]' : 'text-[#0C0C0C] hover:bg-[rgba(55,1,123,.07)] hover:text-[#37017B]',
+                              ].join(' ')}
+                              onMouseDown={(ev) => ev.preventDefault()}
+                              onClick={() => {
+                                setS((p) => ({ ...p, dTarFunc: opt }))
+                                setTarFuncQ(opt)
+                                setTarFuncOpen(false)
+                              }}
+                            >
+                              {opt}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="mt-[14px] rounded-[11px] border border-[rgba(55,1,123,.14)] bg-[linear-gradient(135deg,rgba(55,1,123,.07),rgba(117,4,255,.04))] px-4 py-[13px]">
                     <div className="mb-[6px] text-[10px] font-[800] uppercase tracking-[.07em] text-[#37017B]">
@@ -1074,7 +1264,7 @@ export function Frame1() {
                 </div>
 
                 <div className="mt-[22px] flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-[10px]">
-                  <Button variant="ghost" onClick={() => setPanel('profile')}>
+                  <Button variant="ghost" onClick={() => { setPanel('profile'); window.setTimeout(() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' }), 0) }}>
                     ← Back to Profile
                   </Button>
                   <Button disabled={!readyForAnalyse} onClick={() => readyForAnalyse && setToDestLoading(true)}>

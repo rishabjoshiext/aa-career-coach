@@ -11,6 +11,8 @@ import { resolveJourneySourceCard } from '../utils/journeySourceCard.js'
 import { JOB_LISTINGS, logoKey } from '../utils/jobsData.js'
 import { JobDetailModal } from '../components/modals/JobDetailModal.jsx'
 
+const PBGSEL = { trad: 'rgba(136,136,136,0.18)', fast: 'rgba(255,215,0,0.13)', accel: 'rgba(72,219,133,0.14)' }
+
 const PATHS = [
   { key: 'all', label: 'All Paths', chip: 'on' },
   { key: 'trad', label: '📈 Traditional' },
@@ -593,11 +595,13 @@ export function Frame3() {
 
             <div className="ml-auto flex items-center gap-[6px]">
               <button
-                className="inline-flex items-center gap-2 rounded-[9px] border border-[rgba(255,255,255,.12)] bg-[rgba(117,4,255,.2)] px-3 py-[7px] text-[12px] font-[800] text-[#e9d5ff] transition hover:bg-[rgba(117,4,255,.34)]"
+                className="inline-flex items-center gap-[7px] rounded-[9px] bg-[#7504FF] px-[14px] py-[7px] text-[12px] font-[800] text-white shadow-[0_4px_14px_rgba(117,4,255,.4)] transition-all duration-200 hover:bg-[#8f15ff] active:scale-[.97]"
                 onClick={downloadJourneyPdf}
-                title="Download journey graph as PDF"
               >
-                ⬇ Download
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M6.5 1v7.5M6.5 8.5l-3-3M6.5 8.5l3-3M1.5 11h10" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Download Journey PDF
               </button>
               <span className="text-[10px] font-[600] text-[rgba(250,249,244,.25)]">{Math.round(zoom.s * 100)}%</span>
               <button
@@ -675,6 +679,7 @@ export function Frame3() {
                         opacity: op,
                         ['--mc']: PCOL[pk],
                         borderColor: selected ? PCOL[pk] : undefined,
+                        backgroundColor: selected ? PBGSEL[pk] : undefined,
                       }}
                       onClick={() => setSelectedNode({ pathKey: pk, idx })}
                     >
