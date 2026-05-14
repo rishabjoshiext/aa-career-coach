@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, startTransition } from 'react'
 import { useNavigate } from 'react-router-dom'
-import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import { Button } from '../components/ui/Button.jsx'
 import { useAppState } from '../hooks/appState.jsx'
@@ -273,6 +272,28 @@ CRITICAL: In EVERY path, the LAST node must have goal=true and the field r must 
   }
 }
 
+function pdfRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath()
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y, w, h, r)
+  } else {
+    ctx.moveTo(x + r, y)
+    ctx.lineTo(x + w - r, y)
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r)
+    ctx.lineTo(x + w, y + h - r)
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
+    ctx.lineTo(x + r, y + h)
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r)
+    ctx.lineTo(x, y + r)
+    ctx.quadraticCurveTo(x, y, x + r, y)
+    ctx.closePath()
+  }
+}
+
+function pdfTrunc(text, max) {
+  return String(text || '').length > max ? String(text).slice(0, max) + '…' : String(text || '')
+}
+
 export function Frame3() {
   const nav = useNavigate()
   const { s, selRole, selIndustry } = useAppState()
@@ -533,63 +554,211 @@ export function Frame3() {
     }
   }, [journeyIntroLoading, d])
 
-  const downloadJourneyPdf = async () => {
-    const el = canvasRef.current
-    const vp = vpRef.current
-    if (!el || !vp) return
-
-    // Save inline styles that we'll temporarily override
-    const savedTransform = el.style.transform
-    const savedTransformOrigin = el.style.transformOrigin
-
+  const downloadJourneyPdf = () => {
     try {
-      // Strip the zoom/pan transform so html2canvas sees the element at natural size.
-      // html2canvas does not reliably handle translate3d + scale, causing missing content.
-      el.style.transform = 'none'
-      el.style.transformOrigin = '0 0'
-      // Allow the full canvas width to be visible (parent has overflow:hidden via class)
-      vp.style.overflow = 'visible'
+      const CW = pathTrack.canvasW
+      const CH = 560  // extra headroom for header
+      const DPR = 2
+      const sX = 120
+      const sY = 290  // shifted down to make room for the header text
+      const nodeGap = pathTrack.gap
+      const centerAt = (idx) => sX + (idx + 1) * nodeGap
+      const COL = { trad: '#888888', fast: '#FFD700', accel: '#48DB85' }
 
-      // Let the browser apply the style changes before capturing
-      await new Promise((r) => window.setTimeout(r, 80))
+      const offscreen = document.createElement('canvas')
+      offscreen.width = CW * DPR
+      offscreen.height = CH * DPR
+      const ctx = offscreen.getContext('2d')
+      ctx.scale(DPR, DPR)
 
-      const captured = await html2canvas(el, {
-        backgroundColor: '#0C0C0C',
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        width: pathTrack.canvasW,
-        height: 520,
-        x: 0,
-        y: 0,
-        scrollX: 0,
-        scrollY: 0,
+      // Background
+      ctx.fillStyle = '#0C0C0C'
+      ctx.fillRect(0, 0, CW, CH)
+
+      // Header: destination title
+      ctx.fillStyle = 'rgba(250,249,244,0.9)'
+      ctx.font = 'italic 700 18px Georgia, serif'
+      ctx.textAlign = 'left'
+      ctx.fillText(`Career Journey to ${roleTitle}`, sX, 28)
+      ctx.fillStyle = 'rgba(250,249,244,0.3)'
+      ctx.font = '400 10px Outfit, system-ui, sans-serif'
+      ctx.fillText('Three paths · Same destination', sX, 42)
+
+      // Year grid
+      for (let yr = 1; yr <= 12; yr++) {
+        const x = sX + yr * 185
+        if (x > CW) break
+        ctx.strokeStyle = 'rgba(255,255,255,0.04)'
+        ctx.lineWidth = 1
+        ctx.setLineDash([2, 8])
+        ctx.beginPath()
+        ctx.moveTo(x, 55)
+        ctx.lineTo(x, CH - 10)
+        ctx.stroke()
+        ctx.setLineDash([])
+        if ([1, 2, 3, 5, 7, 9].includes(yr)) {
+          ctx.fillStyle = 'rgba(255,255,255,0.38)'
+          ctx.font = '700 9px Outfit, system-ui, sans-serif'
+          ctx.textAlign = 'center'
+          ctx.fillText(`Yr ${yr}`, x, 66)
+        }
+      }
+      ctx.setLineDash([])
+
+      // Lane backgrounds
+      ;[
+        { y: sY - 180, c: 'rgba(100,100,100,0.06)' },
+        { y: sY,       c: 'rgba(55,1,123,0.06)'    },
+        { y: sY + 180, c: 'rgba(72,219,133,0.06)'  },
+      ].forEach(({ y, c }) => {
+        ctx.fillStyle = c
+        pdfRoundRect(ctx, sX, y - 52, Math.max(400, CW - 160), 104, 10)
+        ctx.fill()
       })
 
-      // Restore
-      el.style.transform = savedTransform
-      el.style.transformOrigin = savedTransformOrigin
-      vp.style.overflow = ''
+      // Path Y positions (relative to sY)
+      const pathY = { trad: sY - 180, fast: sY, accel: sY + 180 }
 
-      const imgData = captured.toDataURL('image/png')
+      // Path lines + labels — draw all paths at full opacity for the PDF
+      ;['trad', 'fast', 'accel'].forEach((pk) => {
+        const py = pathY[pk]
+        const col = COL[pk]
+        ctx.strokeStyle = col
+        ctx.lineWidth = pk === 'accel' ? 2.5 : 2
+        ctx.setLineDash([])
+
+        const fCX = centerAt(0)
+        const fLE = fCX - 82
+
+        // Curved start from NOW to first tile
+        ctx.beginPath()
+        ctx.moveTo(sX, sY)
+        ctx.bezierCurveTo(
+          pk === 'fast' ? sX + 60 : sX + 100, sY,
+          pk === 'fast' ? fLE - 30 : fLE - 70, py,
+          fLE, py,
+        )
+        ctx.stroke()
+
+        // Segments between tiles
+        const ns = d.nodes[pk]
+        for (let i = 0; i < ns.length - 1; i++) {
+          ctx.beginPath()
+          ctx.moveTo(centerAt(i) + 82, py)
+          ctx.lineTo(centerAt(i + 1) - 82, py)
+          ctx.stroke()
+        }
+
+        // Path label above first tile
+        ctx.fillStyle = pk === 'trad' ? 'rgba(250,249,244,0.7)' : col
+        ctx.font = '800 10px Outfit, system-ui, sans-serif'
+        ctx.textAlign = 'left'
+        ctx.fillText(d[pk].label.toUpperCase(), 128, py - 26)
+      })
+
+      // NOW circle
+      const nowX = 34 + 46
+      ctx.strokeStyle = 'rgba(250,249,244,0.3)'
+      ctx.fillStyle = 'rgba(250,249,244,0.08)'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.arc(nowX, sY, 42, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
+      ctx.fillStyle = '#FAF9F4'
+      ctx.font = '800 10px Outfit, system-ui, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('NOW', nowX, sY + 4)
+      const startRole = pdfTrunc(s.role || 'Current', 10)
+      ctx.fillStyle = 'rgba(250,249,244,0.4)'
+      ctx.font = '400 8px Outfit, system-ui, sans-serif'
+      ctx.fillText(startRole, nowX, sY + 16)
+
+      // Milestone tiles
+      ;['trad', 'fast', 'accel'].forEach((pk) => {
+        const py = pathY[pk]
+        const col = COL[pk]
+        const CH_TILE = 92
+        const TW = 176
+
+        d.nodes[pk].forEach((n, idx) => {
+          const cx = centerAt(idx)
+          const tx = cx - 88
+          const ty = py - CH_TILE / 2
+
+          // Tile background
+          ctx.fillStyle = '#1a1a1a'
+          pdfRoundRect(ctx, tx, ty, TW, CH_TILE, 10)
+          ctx.fill()
+          ctx.strokeStyle = '#303030'
+          ctx.lineWidth = 1.5
+          pdfRoundRect(ctx, tx, ty, TW, CH_TILE, 10)
+          ctx.stroke()
+
+          if (n.goal) {
+            // Gold "TARGET ROLE" badge
+            ctx.fillStyle = 'rgba(255,215,0,0.15)'
+            pdfRoundRect(ctx, tx + 11, ty + 10, 86, 14, 20)
+            ctx.fill()
+            ctx.strokeStyle = 'rgba(255,215,0,0.4)'
+            ctx.lineWidth = 0.8
+            pdfRoundRect(ctx, tx + 11, ty + 10, 86, 14, 20)
+            ctx.stroke()
+            ctx.fillStyle = '#FFD700'
+            ctx.font = '700 7px Outfit, system-ui, sans-serif'
+            ctx.textAlign = 'left'
+            ctx.fillText('★  TARGET ROLE', tx + 17, ty + 20)
+
+            // Role title below badge
+            ctx.fillStyle = '#FAF9F4'
+            ctx.font = '800 11px Outfit, system-ui, sans-serif'
+            ctx.fillText(pdfTrunc(n.r, 22), tx + 11, ty + 37)
+          } else {
+            // Colour accent bar
+            ctx.fillStyle = col
+            pdfRoundRect(ctx, tx + 11, ty + 10, TW - 22, 2.5, 2)
+            ctx.fill()
+
+            // Role title
+            ctx.fillStyle = '#FAF9F4'
+            ctx.font = '800 11px Outfit, system-ui, sans-serif'
+            ctx.textAlign = 'left'
+            ctx.fillText(pdfTrunc(n.r, 22), tx + 11, ty + 29)
+          }
+
+          // Year
+          ctx.fillStyle = col
+          ctx.font = '700 9px Outfit, system-ui, sans-serif'
+          ctx.textAlign = 'left'
+          ctx.fillText(`Year ${n.yr}`, tx + 11, ty + 50)
+
+          // Brief
+          ctx.fillStyle = 'rgba(250,249,244,0.45)'
+          ctx.font = '400 8.5px Outfit, system-ui, sans-serif'
+          ctx.fillText(pdfTrunc(n.brief, 32), tx + 11, ty + 63)
+
+          // Salary
+          ctx.fillStyle = col
+          ctx.font = '800 10px Outfit, system-ui, sans-serif'
+          ctx.fillText(n.sal, tx + 11, ty + 77)
+        })
+      })
+
+      // Export to PDF
+      const imgData = offscreen.toDataURL('image/png')
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-      const w = pdf.internal.pageSize.getWidth()
-      const h = pdf.internal.pageSize.getHeight()
-      const ratio = captured.width / captured.height
-      let targetW = w - 10
+      const pw = pdf.internal.pageSize.getWidth()
+      const ph = pdf.internal.pageSize.getHeight()
+      const ratio = offscreen.width / offscreen.height
+      let targetW = pw - 10
       let targetH = targetW / ratio
-      if (targetH > h - 10) {
-        targetH = h - 10
+      if (targetH > ph - 10) {
+        targetH = ph - 10
         targetW = targetH * ratio
       }
-      pdf.addImage(imgData, 'PNG', (w - targetW) / 2, (h - targetH) / 2, targetW, targetH)
+      pdf.addImage(imgData, 'PNG', (pw - targetW) / 2, (ph - targetH) / 2, targetW, targetH)
       pdf.save(`journey-${roleTitle.replace(/\s+/g, '-').toLowerCase()}.pdf`)
     } catch (err) {
-      // Always restore even on failure
-      el.style.transform = savedTransform
-      el.style.transformOrigin = savedTransformOrigin
-      vp.style.overflow = ''
       console.error('Failed to export journey PDF', err)
     }
   }

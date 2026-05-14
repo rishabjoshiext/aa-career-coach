@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button.jsx'
 import { useAppState } from '../hooks/appState.jsx'
@@ -24,21 +24,33 @@ const CAT_META = {
   dev: { title: 'Personal Development', icon: '🌱' },
 }
 
-const ASSESS_OPTS = ['Not started', 'In progress', 'Assessment booked', 'Done']
-
 const GAP_CATS = ['edu', 'skill', 'exp', 'dev']
 
+/** skill and dev items get a per-item counselor assess dropdown */
+const ASSESSABLE_CATS = new Set(['skill', 'dev'])
+
+const ITEM_ASSESS_OPTS = [
+  { value: '', label: 'Assess →' },
+  { value: 'qual', label: '✓ Qualified' },
+  { value: 'miss', label: '✗ Missing' },
+  { value: 'crit', label: '✗ Critical gap' },
+  { value: 'need', label: '~ Partial' },
+]
+
 function pillUi(pill) {
-  if (pill === 'crit')
-    return 'border-[rgba(239,68,68,.35)] bg-[rgba(239,68,68,.08)] text-[#b91c1c]'
-  if (pill === 'miss')
-    return 'border-[rgba(245,158,11,.4)] bg-[rgba(245,158,11,.1)] text-[#b45309]'
+  if (pill === 'crit') return 'border-[rgba(239,68,68,.35)] bg-[rgba(239,68,68,.08)] text-[#b91c1c]'
+  if (pill === 'miss') return 'border-[rgba(245,158,11,.4)] bg-[rgba(245,158,11,.1)] text-[#b45309]'
+  if (pill === 'qual') return 'border-[rgba(5,150,105,.35)] bg-[rgba(5,150,105,.08)] text-[#059669]'
+  if (pill === 'unass') return 'border-[rgba(0,0,0,.12)] bg-[rgba(0,0,0,.03)] text-[#bbb]'
   return 'border-[rgba(59,130,246,.35)] bg-[rgba(59,130,246,.08)] text-[#1d4ed8]'
 }
 
 function pillText(pill) {
   if (pill === 'crit') return 'Critical gap'
   if (pill === 'miss') return 'Missing'
+  if (pill === 'qual') return 'Qualified'
+  if (pill === 'unass') return 'Not assessed'
+  if (pill === 'need') return 'Partial'
   return 'Needed'
 }
 
@@ -64,8 +76,103 @@ function countPills(gaps, pillId) {
   return n
 }
 
-function GapCategoryCard({ cat, meta, block, open, onToggle }) {
+/** Option A / Option B investment block — shown inside the edu accordion */
+function InvestmentBlock({ investCalc, salaryMonthly, dMode }) {
+  const { ftLump, ftMonthly, wsMonthly, wsTotal } = investCalc
+  const breakNote =
+    dMode === 'break'
+      ? `~₹${Math.round((salaryMonthly * 24) / 1000).toLocaleString('en-IN')}k in earnings`
+      : 'salary continuity'
+
+  const optBFeatures = [
+    'Weekend live classes — keep your salary',
+    'UGC recognised · same degree weight',
+    'EMI ≈ 18% of current monthly income',
+    'Earn while you learn — net positive cash flow',
+  ]
+
+  return (
+    <div className="mx-[16px] mb-[14px] overflow-hidden rounded-[11px] border border-[rgba(55,1,123,.2)]">
+      <div className="bg-[linear-gradient(135deg,rgba(55,1,123,.05),rgba(117,4,255,.03))] px-[14px] py-[10px]">
+        <div className="text-[11px] font-[800] uppercase tracking-[.06em] text-[#37017B]">
+          Investment options to close this gap
+        </div>
+        <div className="mt-[2px] text-[10.5px] leading-[1.5] text-[#555]">
+          Two ways to take a degree — pick what fits your situation. Counselor will discuss next steps.
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-px bg-[rgba(55,1,123,.2)]">
+        {/* Option A */}
+        <div className="bg-white px-[14px] py-[13px]">
+          <div className="mb-[5px] text-[10px] font-[800] uppercase tracking-[.06em] text-[#aaa]">
+            Option A · Career Break
+          </div>
+          <div className="mb-[7px] text-[13px] font-[800]">Full-time Degree</div>
+          <div className="mb-[8px] flex items-baseline gap-[5px]">
+            <span className="font-['DM_Serif_Display',serif] text-[22px] leading-none text-[#37017B]">
+              ₹{Math.round(ftLump / 1000)}k
+            </span>
+            <span className="text-[11px] text-[#555]">
+              total · or ₹{ftMonthly.toLocaleString('en-IN')}/mo EMI
+            </span>
+          </div>
+          {['2-year full-time programme', 'Campus placements + alumni network', 'Faster completion (24 months)'].map(
+            (f) => (
+              <div key={f} className="mb-[3px] flex items-start gap-[5px] text-[10.5px] leading-[1.45] text-[#777]">
+                <span className="shrink-0 font-[800] text-[#37017B]">·</span>
+                {f}
+              </div>
+            ),
+          )}
+          <div className="mt-[5px] text-[9.5px] font-[700] text-[#b83000]">
+            Trade-off: career break · loss of {breakNote}
+          </div>
+        </div>
+
+        {/* Option B – Recommended */}
+        <div className="relative bg-[linear-gradient(135deg,#fff,rgba(72,219,133,.04))] px-[14px] py-[13px]">
+          <div className="absolute right-[10px] top-[8px] rounded-[20px] bg-[#48DB85] px-[7px] py-[2px] text-[8px] font-[800] uppercase tracking-[.06em] text-white">
+            Recommended
+          </div>
+          <div className="mb-[5px] text-[10px] font-[800] uppercase tracking-[.06em] text-[#aaa]">
+            Option B · No Break
+          </div>
+          <div className="mb-[7px] text-[13px] font-[800]">Work + Study Degree</div>
+          <div className="mb-[8px] flex items-baseline gap-[5px]">
+            <span className="font-['DM_Serif_Display',serif] text-[22px] leading-none text-[#37017B]">
+              ₹{wsMonthly.toLocaleString('en-IN')}
+            </span>
+            <span className="text-[11px] text-[#555]">
+              /month{wsTotal > 0 ? ` · ~₹${Math.round(wsTotal / 1000).toLocaleString('en-IN')}k total` : ''}
+            </span>
+          </div>
+          {optBFeatures.map((f) => (
+            <div key={f} className="mb-[3px] flex items-start gap-[5px] text-[10.5px] leading-[1.45] text-[#777]">
+              <span className="shrink-0 font-[800] text-[#37017B]">·</span>
+              {f}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function GapCategoryCard({
+  cat,
+  meta,
+  block,
+  open,
+  onToggle,
+  itemAssess,
+  onItemAssess,
+  investCalc,
+  salaryMonthly,
+  dMode,
+}) {
   const count = block.items?.length ?? 0
+  const isAssessable = ASSESSABLE_CATS.has(cat)
+
   return (
     <div className="overflow-hidden rounded-[14px] border border-[rgba(0,0,0,.08)] bg-white shadow-[0_1px_8px_rgba(0,0,0,.04)]">
       <button
@@ -89,19 +196,22 @@ function GapCategoryCard({ cat, meta, block, open, onToggle }) {
           {count} item{count === 1 ? '' : 's'}
         </span>
         <span
-          className={['flex-shrink-0 text-[18px] font-[300] text-[#37017B] transition-transform duration-200', open ? 'rotate-90' : ''].join(
-            ' ',
-          )}
+          className={[
+            'flex-shrink-0 text-[18px] font-[300] text-[#37017B] transition-transform duration-200',
+            open ? 'rotate-90' : '',
+          ].join(' ')}
           aria-hidden
         >
           ›
         </span>
       </button>
+
       {block.imp ? (
         <div className={`px-[16px] py-[10px] text-[12px] font-[800] ${impBarWrap(block.cls)} ${impBarText(block.cls)}`}>
           {block.imp}
         </div>
       ) : null}
+
       {open ? (
         <div
           id={`gap-panel-${cat}`}
@@ -110,36 +220,64 @@ function GapCategoryCard({ cat, meta, block, open, onToggle }) {
           className="border-t border-[rgba(0,0,0,.06)]"
         >
           <div className="divide-y divide-[rgba(0,0,0,.05)] bg-[rgba(250,249,244,.35)]">
-            {block.items.map((it, idx) => (
-              <div key={`${cat}-${it.n}-${idx}`} className="bg-white px-[16px] py-[14px]">
-                <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-                  <div className="text-[14px] font-[800] leading-snug text-[#0C0C0C]">
-                    {idx + 1}. {it.n}
+            {block.items.map((it, idx) => {
+              const assessKey = `${cat}-${idx}`
+              const assessed = isAssessable ? (itemAssess[assessKey] ?? '') : null
+              const displayPill = assessed !== null ? (assessed === '' ? 'unass' : assessed) : it.pill
+
+              return (
+                <div key={`${cat}-${it.n}-${idx}`} className="bg-white px-[16px] py-[14px]">
+                  <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                    <div className="text-[14px] font-[800] leading-snug text-[#0C0C0C]">
+                      {idx + 1}. {it.n}
+                    </div>
+                    <div className="flex flex-shrink-0 items-center gap-2">
+                      {isAssessable ? (
+                        <select
+                          value={assessed ?? ''}
+                          onChange={(e) => onItemAssess(cat, idx, e.target.value)}
+                          className="cursor-pointer rounded-[6px] border border-[rgba(0,0,0,.08)] bg-white px-[6px] py-[3px] text-[10px] font-[600] text-[#888] outline-none focus:border-[#37017B] focus:ring-1 focus:ring-[#37017B]"
+                        >
+                          {ITEM_ASSESS_OPTS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
+                      {displayPill ? (
+                        <span
+                          className={[
+                            'inline-flex flex-shrink-0 rounded-[20px] border px-[10px] py-[3px] text-[9px] font-[800] uppercase tracking-[.06em]',
+                            pillUi(displayPill),
+                          ].join(' ')}
+                        >
+                          {pillText(displayPill)}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
-                  {it.pill ? (
-                    <span
-                      className={[
-                        'inline-flex flex-shrink-0 rounded-[20px] border px-[10px] py-[3px] text-[9px] font-[800] uppercase tracking-[.06em]',
-                        pillUi(it.pill),
-                      ].join(' ')}
-                    >
-                      {pillText(it.pill)}
-                    </span>
-                  ) : null}
+                  <p className="mb-2 text-[12.5px] leading-[1.5] text-[#555]">{it.d}</p>
+                  {it.w ? <p className="mb-2 text-[11.5px] font-[600] text-[#37017B]">{it.w}</p> : null}
+                  <ul className="space-y-[6px]">
+                    {it.actions?.map((a) => (
+                      <li key={a} className="flex gap-2 text-[12px] leading-[1.45] text-[#444]">
+                        <span className="mt-[6px] h-[5px] w-[5px] flex-shrink-0 rounded-full bg-[#37017B]" />
+                        {a}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <p className="mb-2 text-[12.5px] leading-[1.5] text-[#555]">{it.d}</p>
-                {it.w ? <p className="mb-2 text-[11.5px] font-[600] text-[#37017B]">{it.w}</p> : null}
-                <ul className="space-y-[6px]">
-                  {it.actions?.map((a) => (
-                    <li key={a} className="flex gap-2 text-[12px] leading-[1.45] text-[#444]">
-                      <span className="mt-[6px] h-[5px] w-[5px] flex-shrink-0 rounded-full bg-[#37017B]" />
-                      {a}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+              )
+            })}
           </div>
+
+          {/* Investment options shown at the bottom of the edu accordion */}
+          {cat === 'edu' && investCalc ? (
+            <div className="py-[10px]">
+              <InvestmentBlock investCalc={investCalc} salaryMonthly={salaryMonthly} dMode={dMode} />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -160,7 +298,7 @@ export function Frame4() {
   } = useAppState()
 
   const [pathOpen, setPathOpen] = useState(false)
-  const [skAssess, setSkAssess] = useState({ skill: ASSESS_OPTS[0], dev: ASSESS_OPTS[0] })
+  const [itemAssess, setItemAssess] = useState({})
   const [openSections, setOpenSections] = useState(() => ({
     edu: false,
     skill: false,
@@ -171,7 +309,6 @@ export function Frame4() {
   const [gapsLoading, setGapsLoading] = useState(true)
 
   const pdKey = resolvePdRole(selRole)
-  /** User-visible destination — always the chosen card title, never the internal PD fallback key */
   const destinationTitle = (selRole && String(selRole).trim()) || 'your goal'
 
   const industryLabel = useMemo(() => {
@@ -187,7 +324,6 @@ export function Frame4() {
 
   const pd = PD[pdKey] || PD['Finance Manager']
 
-  /** Resolve catalog / AI gaps when exact card title missing */
   const roleTitleForGaps = (selRole || '').trim() || pdKey
 
   useEffect(() => {
@@ -223,6 +359,24 @@ export function Frame4() {
     }
   }, [roleTitleForGaps, industryLabel, roleCard])
 
+  /** Monthly salary in ₹ — profile stores it as monthly rupees (e.g. 24000) */
+  const salaryMonthly = useMemo(() => {
+    const v = Number(String(s.salary || '').replace(/[^\d.]/g, ''))
+    if (Number.isFinite(v) && v > 0) return v
+    const lpa = Number(s.dSalary)
+    return Number.isFinite(lpa) && lpa > 0 ? Math.round((lpa * 100000) / 12) : 20000
+  }, [s.salary, s.dSalary])
+
+  /** Investment option costs derived from monthly salary — matching HTML prototype */
+  const investCalc = useMemo(() => {
+    const sal = salaryMonthly
+    const ftLump = Math.max(89000, Math.round(sal * 5))
+    const ftMonthly = Math.round(ftLump / 24)
+    const wsMonthly = Math.max(2500, Math.round(sal * 0.18))
+    const wsTotal = wsMonthly * 30
+    return { ftLump, ftMonthly, wsMonthly, wsTotal }
+  }, [salaryMonthly])
+
   const salaryLpa = useMemo(() => {
     const v = Number(String(s.salary || '').replace(/[^\d.]/g, ''))
     if (Number.isFinite(v) && v > 0) return v
@@ -239,20 +393,11 @@ export function Frame4() {
     }
   }, [gaps])
 
-  const degreePlan = useMemo(() => {
-    const monthly = Math.round((salaryLpa * 100000) / 12)
-    const courseLacs = Math.min(18, Math.round((5 + salaryLpa * 0.4) * 10) / 10)
-    const emi = Math.round(monthly * 0.12)
-    return { monthly, courseLacs, emi }
-  }, [salaryLpa])
-
-  const certPlan = useMemo(() => {
-    const lacs = Math.min(4.5, Math.round((0.8 + salaryLpa * 0.06) * 10) / 10)
-    const weeks = salaryLpa >= 12 ? 14 : 22
-    return { lacs, weeks }
-  }, [salaryLpa])
-
   const pathNodes = pd.nodes?.[gapPath] || []
+
+  const handleItemAssess = useCallback((catKey, itemIdx, value) => {
+    setItemAssess((prev) => ({ ...prev, [`${catKey}-${itemIdx}`]: value }))
+  }, [])
 
   const pickPath = (k) => {
     setGapPath(k)
@@ -297,6 +442,7 @@ export function Frame4() {
           items block shortlisting; missing items hurt interviews; needed items strengthen your case.
         </p>
 
+        {/* Summary card with path selector */}
         <div
           className={[
             'mb-4 overflow-hidden rounded-[16px] border border-[rgba(255,255,255,.08)] bg-[#0C0C0C] px-[20px] py-[20px] text-[#FAF9F4] shadow-[0_12px_40px_rgba(0,0,0,.18)]',
@@ -343,14 +489,18 @@ export function Frame4() {
           </div>
         </div>
 
+        {/* Social proof */}
         <div className="mb-6 rounded-[12px] border border-[rgba(72,219,133,.35)] bg-[rgba(72,219,133,.12)] px-[16px] py-[12px] text-[12.5px] font-[600] leading-[1.5] text-[#14532d]">
-          Of {profilesN} profiles with your background who reached <strong className="font-[800] text-[#052e16]">{destinationTitle}</strong>,{' '}
+          Of {profilesN} profiles with your background who reached{' '}
+          <strong className="font-[800] text-[#052e16]">{destinationTitle}</strong>,{' '}
           {socialPct}% closed every Critical gap below before getting shortlisted.
         </div>
 
         <div className="mb-2 text-[10px] font-[700] uppercase tracking-[.09em] text-[#bbb]">
           Profile gap breakdown — assess each item below with your counselor
         </div>
+
+        {/* Gap accordions */}
         <div className="mb-8 space-y-3">
           {gapsLoading || !gaps
             ? GAP_CATS.map((cat) => (
@@ -359,111 +509,55 @@ export function Frame4() {
                   className="h-[88px] animate-pulse rounded-[14px] border border-[rgba(0,0,0,.06)] bg-[rgba(0,0,0,.04)]"
                 />
               ))
-            : GAP_CATS.map((cat) => {
-                const block = gaps[cat]
-                const meta = CAT_META[cat]
-                return (
-                  <GapCategoryCard
-                    key={cat}
-                    cat={cat}
-                    meta={meta}
-                    block={block}
-                    open={openSections[cat]}
-                    onToggle={toggleSection}
-                  />
-                )
-              })}
+            : GAP_CATS.map((cat) => (
+                <GapCategoryCard
+                  key={cat}
+                  cat={cat}
+                  meta={CAT_META[cat]}
+                  block={gaps[cat]}
+                  open={openSections[cat]}
+                  onToggle={toggleSection}
+                  itemAssess={itemAssess}
+                  onItemAssess={handleItemAssess}
+                  investCalc={cat === 'edu' ? investCalc : null}
+                  salaryMonthly={salaryMonthly}
+                  dMode={s.dMode}
+                />
+              ))}
         </div>
 
-        <div className="mb-6 rounded-[14px] border border-[rgba(0,0,0,.08)] bg-[linear-gradient(135deg,rgba(55,1,123,.06),#fff)] px-[18px] py-[16px]">
-          <div className="mb-3 text-[11px] font-[800] uppercase tracking-[.08em] text-[#37017B]">Education pathways</div>
-          <p className="mb-4 text-[12.5px] leading-[1.55] text-[#555]">
-            Your current salary band is approximately <strong className="text-[#0C0C0C]">₹{salaryLpa} LPA</strong> (~₹
-            {degreePlan.monthly.toLocaleString('en-IN')}/mo). Two realistic funding patterns candidates like you choose.
+        {/* Upskilling budget — feeds ROI screen */}
+        <div className="mb-10 rounded-[14px] border border-[rgba(0,0,0,.08)] bg-[rgba(250,249,244,.5)] px-[18px] py-[16px]">
+          <div className="mb-2 text-[13px] font-[800]">Your upskilling budget</div>
+          <p className="mb-3 text-[11.5px] text-[#666]">We&apos;ll use this on the next screen for payback math.</p>
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] text-[#888]">₹</span>
+            <input
+              type="number"
+              min={0}
+              step={0.1}
+              value={eduBudgetLacs}
+              onChange={(e) => setEduBudgetLacs(Number(e.target.value) || 0)}
+              className="w-full rounded-[10px] border border-[rgba(0,0,0,.12)] bg-white px-[12px] py-[10px] text-[15px] font-[800] outline-none ring-[#37017B] focus:ring-2"
+            />
+            <span className="text-[12px] font-[700] text-[#888]">Lacs</span>
+          </div>
+          <p className="mt-2 text-[11px] text-[#aaa]">
+            Current salary ~₹{salaryLpa.toLocaleString('en-IN')} · comfortable monthly investment ≈ ₹
+            {Math.round(salaryMonthly * 0.18).toLocaleString('en-IN')}/mo
           </p>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-[12px] border border-[rgba(0,0,0,.08)] bg-white p-[14px]">
-              <div className="mb-2 text-[11px] font-[800] uppercase tracking-[.08em] text-[#37017B]">Degree pathway</div>
-              <div className="mb-2 text-[22px] font-[800]">~₹{degreePlan.courseLacs} L</div>
-              <p className="mb-3 text-[11.5px] leading-[1.5] text-[#666]">
-                Full UG/PG programme · EMI-friendly · strongest signal for screening algorithms.
-              </p>
-              <div className="rounded-[8px] bg-[rgba(55,1,123,.06)] px-[10px] py-[8px] text-[11px] text-[#444]">
-                Indicative EMI @ 12% of monthly take-home:{' '}
-                <strong className="text-[#0C0C0C]">₹{degreePlan.emi.toLocaleString('en-IN')}/mo</strong>
-              </div>
-            </div>
-            <div className="rounded-[12px] border border-[rgba(0,0,0,.08)] bg-white p-[14px]">
-              <div className="mb-2 text-[11px] font-[800] uppercase tracking-[.08em] text-[#15803d]">Certification stack</div>
-              <div className="mb-2 text-[22px] font-[800]">~₹{certPlan.lacs} L</div>
-              <p className="mb-3 text-[11.5px] leading-[1.5] text-[#666]">
-                Faster · complements current role · upgrade later to degree if needed.
-              </p>
-              <div className="rounded-[8px] bg-[rgba(21,128,61,.07)] px-[10px] py-[8px] text-[11px] text-[#444]">
-                Typical completion: <strong className="text-[#0C0C0C]">{certPlan.weeks} weeks</strong> alongside work
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-10 grid gap-4 rounded-[14px] border border-[rgba(0,0,0,.08)] bg-[rgba(250,249,244,.5)] px-[18px] py-[16px] lg:grid-cols-2">
-          <div>
-            <div className="mb-2 text-[13px] font-[800]">Your upskilling budget</div>
-            <p className="mb-3 text-[11.5px] text-[#666]">We&apos;ll use this on the next screen for payback math.</p>
-            <div className="flex items-center gap-2">
-              <span className="text-[13px] text-[#888]">₹</span>
-              <input
-                type="number"
-                min={0}
-                step={0.1}
-                value={eduBudgetLacs}
-                onChange={(e) => setEduBudgetLacs(Number(e.target.value) || 0)}
-                className="w-full rounded-[10px] border border-[rgba(0,0,0,.12)] bg-white px-[12px] py-[10px] text-[15px] font-[800] outline-none ring-[#37017B] focus:ring-2"
-              />
-              <span className="text-[12px] font-[700] text-[#888]">Lacs</span>
-            </div>
-          </div>
-          <div>
-            <div className="mb-2 text-[13px] font-[800]">Self-assessment</div>
-            <p className="mb-3 text-[11.5px] text-[#666]">Track intent for skill and visibility gaps — your counselor sees this.</p>
-            <div className="space-y-3">
-              <label className="block text-[11px] font-[700] uppercase tracking-[.06em] text-[#888]">
-                Skills programme
-                <select
-                  value={skAssess.skill}
-                  onChange={(e) => setSkAssess((p) => ({ ...p, skill: e.target.value }))}
-                  className="mt-1 w-full rounded-[10px] border border-[rgba(0,0,0,.12)] bg-white px-[10px] py-[9px] text-[13px] outline-none ring-[#37017B] focus:ring-2"
-                >
-                  {ASSESS_OPTS.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-[11px] font-[700] uppercase tracking-[.06em] text-[#888]">
-                Visibility / referrals
-                <select
-                  value={skAssess.dev}
-                  onChange={(e) => setSkAssess((p) => ({ ...p, dev: e.target.value }))}
-                  className="mt-1 w-full rounded-[10px] border border-[rgba(0,0,0,.12)] bg-white px-[10px] py-[9px] text-[13px] outline-none ring-[#37017B] focus:ring-2"
-                >
-                  {ASSESS_OPTS.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </div>
         </div>
 
         <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-[rgba(0,0,0,.06)] pt-6">
           <p className="max-w-[420px] text-[12px] text-[#888]">
-            Path horizon for <strong className="text-[#0C0C0C]">{PATH_PILLS.find((p) => p.key === gapPath)?.label}</strong>: ~{pd[gapPath]?.yrs ?? '—'} yrs to{' '}
+            Path horizon for{' '}
+            <strong className="text-[#0C0C0C]">{PATH_PILLS.find((p) => p.key === gapPath)?.label}</strong>: ~
+            {pd[gapPath]?.yrs ?? '—'} yrs to{' '}
             <strong className="text-[#0C0C0C]">{destinationTitle}</strong> · saves{' '}
-            <strong className="text-[#15803d]">{pd.trad.yrs - (pd[gapPath]?.yrs ?? pd.trad.yrs)} yrs</strong> vs traditional
+            <strong className="text-[#15803d]">
+              {pd.trad.yrs - (pd[gapPath]?.yrs ?? pd.trad.yrs)} yrs
+            </strong>{' '}
+            vs traditional
           </p>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => nav('/3')}>
@@ -474,6 +568,7 @@ export function Frame4() {
         </div>
       </div>
 
+      {/* My Path modal */}
       {pathOpen ? (
         <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45 p-4 sm:items-center">
           <div
@@ -483,7 +578,9 @@ export function Frame4() {
           >
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <div className="text-[18px] font-[800] [font-family:'DM Serif Display',serif]">Your path · {destinationTitle}</div>
+                <div className="text-[18px] font-[800] [font-family:'DM Serif Display',serif]">
+                  Your path · {destinationTitle}
+                </div>
                 <div className="mt-1 text-[12px] text-[#666]">
                   {pd[gapPath]?.label ?? ''} · ~{pd[gapPath]?.yrs} years (illustrative ladder for your function)
                 </div>
@@ -502,7 +599,9 @@ export function Frame4() {
                   key={`${n.r}-${n.yr}`}
                   className={[
                     'rounded-[11px] border px-[12px] py-[10px]',
-                    n.goal ? 'border-[rgba(72,219,133,.45)] bg-[rgba(72,219,133,.08)]' : 'border-[rgba(0,0,0,.06)] bg-white',
+                    n.goal
+                      ? 'border-[rgba(72,219,133,.45)] bg-[rgba(72,219,133,.08)]'
+                      : 'border-[rgba(0,0,0,.06)] bg-white',
                   ].join(' ')}
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
