@@ -4,7 +4,6 @@ import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import { Button } from '../components/ui/Button.jsx'
 import { useAppState } from '../hooks/appState.jsx'
-import { PathLoader } from '../components/loaders/PathLoader.jsx'
 import { RunLoadOverlay } from '../components/loaders/RunLoadOverlay.jsx'
 import { PD } from '../utils/pathData.js'
 import { resolvePdRole } from '../utils/roleKey.js'
@@ -21,7 +20,8 @@ const PATHS = [
 
 const PY = { trad: 90, fast: 270, accel: 450 }
 const PCOL = { trad: '#888', fast: '#FFD700', accel: '#48DB85' }
-const NODE_GAP = 280
+/** Visual hierarchy: Traditional has the most milestones, then Fast Track, then Accelerated. */
+const PATH_NODE_COUNTS = { trad: 6, fast: 4, accel: 3 }
 
 function jobsForRole(roleName) {
   return JOB_LISTINGS[roleName] || []
@@ -74,6 +74,42 @@ function mkNode(r, yr, brief, sal, isGoal = false) {
   }
 }
 
+function bandAtProgress(min, max, t) {
+  const lo = Math.round(min + (max - min) * Math.max(0, t - 0.12) * 0.85)
+  const hi = Math.round(min + (max - min) * Math.min(1, t + 0.08))
+  return formatBand(Math.min(lo, hi), Math.max(lo, hi))
+}
+
+function buildPathRungs({ count, yearsTotal, target, desc, min, max, currentRole, pathKey }) {
+  const rungs = []
+  const tiers = ['Associate', 'Analyst', 'Specialist', 'Senior', 'Lead']
+  for (let i = 0; i < count; i += 1) {
+    const isGoal = i === count - 1
+    const t = count === 1 ? 1 : i / (count - 1)
+    const yr = Math.max(0.6, +(yearsTotal * t).toFixed(1))
+    const sal = bandAtProgress(min, max, 0.35 + t * 0.62)
+    if (isGoal) {
+      rungs.push(mkNode(target, yr, desc, formatBand(min, max), true))
+      continue
+    }
+    if (pathKey === 'accel' && i === 0) {
+      rungs.push(
+        mkNode(
+          `${(currentRole || 'Current').slice(0, 22)} + Upskilling`,
+          yr,
+          'Parallel work + credential build; weekends / online',
+          bandAtProgress(min, max, 0.32),
+          false,
+        ),
+      )
+      continue
+    }
+    const tier = tiers[Math.min(i, tiers.length - 1)]
+    rungs.push(mkNode(`${target} ${tier}`, yr, 'Progressive skill and responsibility growth at this stage.', sal, false))
+  }
+  return rungs
+}
+
 function deterministicJourney(card, currentRole = 'Current Role') {
   const target = card?.role || 'Career Destination'
   const desc = card?.desc || 'Progress toward target destination'
@@ -83,37 +119,61 @@ function deterministicJourney(card, currentRole = 'Current Role') {
     accel: Number(card?.accelYrs) || 3,
   }
   const { min, max } = parseMonthlyBand(card?.sal)
-  const startMin = Math.max(18000, Math.round(min * 0.45))
-  const startMax = Math.max(startMin + 6000, Math.round(max * 0.5))
-  const mid1 = formatBand(Math.round(startMin * 1.18), Math.round(startMax * 1.18))
-  const mid2 = formatBand(Math.round(startMin * 1.35), Math.round(startMax * 1.35))
-  const mid3 = formatBand(Math.round(startMin * 1.6), Math.round(startMax * 1.62))
-  const targetBand = formatBand(min, max)
+  const nTrad = PATH_NODE_COUNTS.trad
+  const nFast = PATH_NODE_COUNTS.fast
+  const nAccel = PATH_NODE_COUNTS.accel
   return {
     trad: { yrs: yrs.trad, label: 'Traditional' },
     fast: { yrs: yrs.fast, label: 'Fast Track' },
     accel: { yrs: yrs.accel, label: 'Accelerated' },
     nodes: {
-      trad: [
-        mkNode(`${target} Associate`, Math.max(1, +(yrs.trad * 0.2).toFixed(1)), 'Foundation role and core execution', mid1),
-        mkNode(`${target} Specialist`, Math.max(2, +(yrs.trad * 0.45).toFixed(1)), 'Independent ownership of key workstreams', mid2),
-        mkNode(`${target} Senior`, Math.max(3, +(yrs.trad * 0.72).toFixed(1)), 'Cross-team ownership and quality benchmarks', mid3),
-        mkNode(target, yrs.trad, `${desc}`, targetBand, true),
-      ],
-      fast: [
-        mkNode(`${target} Specialist`, Math.max(1, +(yrs.fast * 0.28).toFixed(1)), 'Fast-track ownership on priority initiatives', mid2),
-        mkNode(`${target} Senior`, Math.max(2, +(yrs.fast * 0.62).toFixed(1)), 'Lead high-impact initiatives with visibility', mid3),
-        mkNode(`${target} Lead`, Math.max(2.5, +(yrs.fast * 0.85).toFixed(1)), 'Drive teams/process with stronger business accountability', formatBand(Math.round(min * 0.9), Math.round(max * 0.92))),
-        mkNode(target, yrs.fast, `${desc}`, targetBand, true),
-      ],
-      accel: [
-        mkNode(`${currentRole || 'Current'} + Upskilling`, Math.max(0.8, +(yrs.accel * 0.35).toFixed(1)), 'Parallel execution with focused credential building', mid2),
-        mkNode(`${target} Specialist`, Math.max(1.5, +(yrs.accel * 0.68).toFixed(1)), 'Role transition with portfolio-driven interviews', mid3),
-        mkNode(`${target} Lead`, Math.max(2, +(yrs.accel * 0.9).toFixed(1)), 'Lead scope with measurable business outcomes', formatBand(Math.round(min * 0.92), Math.round(max * 0.95))),
-        mkNode(target, yrs.accel, `${desc}`, targetBand, true),
-      ],
+      trad: buildPathRungs({
+        count: nTrad,
+        yearsTotal: yrs.trad,
+        target,
+        desc,
+        min,
+        max,
+        currentRole,
+        pathKey: 'trad',
+      }),
+      fast: buildPathRungs({
+        count: nFast,
+        yearsTotal: yrs.fast,
+        target,
+        desc,
+        min,
+        max,
+        currentRole,
+        pathKey: 'fast',
+      }),
+      accel: buildPathRungs({
+        count: nAccel,
+        yearsTotal: yrs.accel,
+        target,
+        desc,
+        min,
+        max,
+        currentRole,
+        pathKey: 'accel',
+      }),
     },
   }
+}
+
+function journeyHasCanonicalLengths(j) {
+  if (!j?.nodes) return false
+  return (
+    j.nodes.trad?.length === PATH_NODE_COUNTS.trad &&
+    j.nodes.fast?.length === PATH_NODE_COUNTS.fast &&
+    j.nodes.accel?.length === PATH_NODE_COUNTS.accel
+  )
+}
+
+/** PD / AI may ship other lengths — coerce to canonical 6 / 4 / 3 so layout + hierarchy stay consistent. */
+function ensureCanonicalJourney(raw, card, currentRole) {
+  if (raw && journeyHasCanonicalLengths(raw)) return raw
+  return deterministicJourney(card, currentRole)
 }
 
 function stripJsonFence(text) {
@@ -154,10 +214,11 @@ function enrichJourneyDetails(parsed) {
 function validateJourneyForTarget(parsed, targetRole) {
   const want = String(targetRole || '').trim()
   if (!parsed || !want) return null
-  const paths = ['trad', 'fast', 'accel']
-  for (const pk of paths) {
+  const { trad: nt, fast: nf, accel: na } = PATH_NODE_COUNTS
+  for (const pk of ['trad', 'fast', 'accel']) {
     const nodes = parsed.nodes?.[pk]
-    if (!Array.isArray(nodes) || nodes.length !== 4) return null
+    const expected = pk === 'trad' ? nt : pk === 'fast' ? nf : na
+    if (!Array.isArray(nodes) || nodes.length !== expected) return null
     const last = nodes[nodes.length - 1]
     if (!last.goal) return null
     if (String(last.r || '').trim() !== want) return null
@@ -181,9 +242,10 @@ Target salary band: ${card.sal}
 Current role: ${currentRole || 'Current Role'}
 
 Output JSON shape:
-{"trad":{"yrs":number,"label":"Traditional"},"fast":{"yrs":number,"label":"Fast Track"},"accel":{"yrs":number,"label":"Accelerated"},"nodes":{"trad":[...4 nodes...],"fast":[...4 nodes...],"accel":[...4 nodes...]}}
+{"trad":{"yrs":number,"label":"Traditional"},"fast":{"yrs":number,"label":"Fast Track"},"accel":{"yrs":number,"label":"Accelerated"},"nodes":{"trad":[...EXACTLY 6 nodes...],"fast":[...EXACTLY 4 nodes...],"accel":[...EXACTLY 3 nodes...]}}
 
 Each node: r, yr, brief, sal, detail object with lifestyle (string), what (array of 4 strings), skills (array of 4 strings).
+The three paths MUST have different lengths: traditional has the most steps (6), fast track fewer (4), accelerated the fewest (3).
 CRITICAL: In EVERY path, the LAST node must have goal=true and the field r must be EXACTLY "${target}" (same spelling and spacing). Intermediate roles must be realistic steps toward ${target}, not a different profession.`
   try {
     const resp = await fetch('https://api.openai.com/v1/responses', {
@@ -229,10 +291,16 @@ export function Frame3() {
   )
 
   const d = useMemo(() => {
-    if (dynJourney) return dynJourney
-    if (pdStatic) return pdStatic
-    return deterministicFallback
-  }, [dynJourney, pdStatic, deterministicFallback])
+    const raw = dynJourney || pdStatic || deterministicFallback
+    return ensureCanonicalJourney(raw, journeyCard, s.role || '')
+  }, [dynJourney, pdStatic, deterministicFallback, journeyCard, s.role])
+
+  const pathTrack = useMemo(() => {
+    const m = Math.max(d.nodes.trad.length, d.nodes.fast.length, d.nodes.accel.length)
+    const gap = Math.min(280, Math.max(218, Math.floor(1700 / Math.max(m, 1))))
+    const canvasW = 120 + m * gap + 360
+    return { maxNodes: m, gap, canvasW }
+  }, [d])
 
   const [filter, setFilter] = useState('all')
   const [zoom, setZoom] = useState({ s: 1, tx: 0, ty: 0, target_s: 1, target_tx: 0, target_ty: 0 })
@@ -254,7 +322,8 @@ export function Frame3() {
   const linesSvg = useMemo(() => {
     const sX = 120
     const sY = 270
-    const maxX = 1960
+    const nodeGap = pathTrack.gap
+    const maxX = pathTrack.canvasW
     let svg = ''
 
     for (let yr = 1; yr <= 12; yr += 1) {
@@ -271,7 +340,7 @@ export function Frame3() {
       { y: 270, c: 'rgba(55,1,123,0.04)' },
       { y: 440, c: 'rgba(72,219,133,0.04)' },
     ].forEach((tr) => {
-      svg += `<rect x="120" y="${tr.y - 52}" width="1780" height="104" rx="10" fill="${tr.c}" />`
+      svg += `<rect x="120" y="${tr.y - 52}" width="${Math.max(400, maxX - 200)}" height="104" rx="10" fill="${tr.c}" />`
     })
 
     ;['trad', 'fast', 'accel'].forEach((pk) => {
@@ -280,7 +349,7 @@ export function Frame3() {
       const op = isActive ? 1 : 0.05
       const sw = isActive ? (pk === 'accel' ? 3 : 2) : 1
       const ns = d.nodes[pk]
-      const centerAt = (idx) => sX + (idx + 1) * NODE_GAP
+      const centerAt = (idx) => sX + (idx + 1) * nodeGap
       const fCX = centerAt(0)
       const fLE = fCX - 82
       const start =
@@ -302,7 +371,7 @@ export function Frame3() {
     })
 
     return svg
-  }, [d, filter])
+  }, [d, filter, pathTrack])
 
   useEffect(() => {
     const vp = vpRef.current
@@ -558,8 +627,17 @@ export function Frame3() {
           ref={vpRef}
           className="relative flex-1 cursor-grab overflow-hidden rounded-[12px] border border-[rgba(255,255,255,.04)] bg-[linear-gradient(180deg,#0d0d0d_0%,#0C0C0C_100%)] active:cursor-grabbing"
         >
-          <div ref={canvasRef} className="absolute h-[520px] w-[1960px]" style={canvasStyle}>
-            <svg className="pointer-events-none absolute left-0 top-0 h-[520px] w-[1960px]" dangerouslySetInnerHTML={{ __html: `<defs></defs>${linesSvg}` }} />
+          <div
+            ref={canvasRef}
+            className="absolute h-[520px]"
+            style={{ ...canvasStyle, width: `${pathTrack.canvasW}px` }}
+          >
+            <svg
+              className="pointer-events-none absolute left-0 top-0 h-[520px]"
+              width={pathTrack.canvasW}
+              height={520}
+              dangerouslySetInnerHTML={{ __html: `<defs></defs>${linesSvg}` }}
+            />
 
             <div className="absolute left-[34px] flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full border-2 border-[rgba(250,249,244,.28)] bg-[rgba(250,249,244,.08)]" style={{ top: `${270 - 46}px` }}>
               <div className="text-[10.5px] font-[900] uppercase tracking-[.06em] text-[#FAF9F4]">NOW</div>
@@ -572,7 +650,7 @@ export function Frame3() {
                 const op = isActive ? 1 : 0.07
                 const py = PY[pk]
                 const sX = 120
-                const centerAt = (idx) => sX + (idx + 1) * NODE_GAP
+                const centerAt = (idx) => sX + (idx + 1) * pathTrack.gap
                 const CH = 92
                 return d.nodes[pk].map((n, idx) => {
                   const cx = centerAt(idx)
@@ -626,14 +704,29 @@ export function Frame3() {
         </div>
 
         {/* milestone detail panel */}
-        <div className={['mt-[10px] overflow-hidden rounded-[12px] border border-[#1e1e1e] bg-[#111] transition-all duration-300', selectedDetail ? 'border-[#2a2a2a] opacity-100' : 'opacity-70'].join(' ')}>
+        <div
+          className={[
+            'relative mt-[10px] overflow-hidden rounded-[12px] border border-[#1e1e1e] bg-[#111] transition-all duration-300',
+            selectedDetail ? 'border-[#2a2a2a] opacity-100' : 'opacity-70',
+          ].join(' ')}
+        >
+          {selectedDetail ? (
+            <button
+              type="button"
+              className="absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-[8px] border border-[rgba(255,255,255,.1)] bg-[rgba(255,255,255,.06)] text-[18px] font-[400] leading-none text-[rgba(250,249,244,.75)] transition hover:bg-[rgba(255,255,255,.12)] hover:text-[#FAF9F4]"
+              onClick={() => setSelectedNode(null)}
+              aria-label="Close milestone details"
+            >
+              ×
+            </button>
+          ) : null}
           {!selectedDetail ? (
             <div className="flex items-center gap-[10px] px-5 py-4 text-[12px] text-[rgba(250,249,244,.25)]">
               <span className="text-[18px] opacity-30 motion-safe:animate-[float_3s_ease-in-out_infinite]">👆</span>
               Click any milestone on the path to see what happens at that stage
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_1fr_1fr]">
+            <div className="grid grid-cols-1 pt-1 pr-12 lg:grid-cols-[220px_1fr_1fr_1fr]">
               <div className="border-r border-[rgba(255,255,255,.04)] px-4 py-[14px]" style={{ borderLeft: `3px solid ${selectedDetail.col}` }}>
                 <div className="mb-[7px] inline-block rounded-[20px] border px-[9px] py-[3px] text-[8.5px] font-[800] uppercase tracking-[.07em]" style={{ color: selectedDetail.col, borderColor: `${selectedDetail.col}44`, background: `${selectedDetail.col}22` }}>
                   {selectedDetail.pathKey === 'trad' ? '📈 Traditional' : selectedDetail.pathKey === 'fast' ? '⚡ Fast Track' : '🚀 Accelerated'}
@@ -753,12 +846,6 @@ export function Frame3() {
       </div>
 
       <JobDetailModal open={jobModal.open} job={jobModal.job} onClose={() => setJobModal({ open: false, job: null })} />
-      <PathLoader
-        open={journeyIntroLoading}
-        role={roleTitle}
-        title="Building your career paths…"
-        durationMs={1700}
-      />
       <RunLoadOverlay
         open={gapLoading}
         variant="gaps"

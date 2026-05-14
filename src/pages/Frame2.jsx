@@ -28,7 +28,12 @@ export function Frame2() {
   const nav = useNavigate()
   const { s, selIndustry, setSelIndustry, selRole, setSelRole, pathLoading, setPathLoading } = useAppState()
   const [customRole, setCustomRole] = useState('')
+  const [industryRowExpanded, setIndustryRowExpanded] = useState(false)
   const alignRef = useRef(null)
+
+  useEffect(() => {
+    setIndustryRowExpanded(false)
+  }, [selIndustry])
 
   const mappingInsight = useMemo(() => buildMappingInsight(s), [s])
 
@@ -47,12 +52,14 @@ export function Frame2() {
 
   const orderedIndustries = useMemo(() => {
     const all = INDUSTRIES.slice()
-    if (!selIndustry || selIndustry === 'all') return all
-    const sel = all.find((x) => x.id === selIndustry)
-    const rest = all.filter((x) => x.id !== selIndustry && x.id !== 'all')
     const allChip = all.find((x) => x.id === 'all')
-    // Requirement: selected pill moves in front; others remain unselected behind it.
-    return [sel, allChip, ...rest].filter(Boolean)
+    const rest = all.filter((x) => x.id !== 'all')
+    if (!selIndustry || selIndustry === 'all') {
+      return [allChip, ...rest].filter(Boolean)
+    }
+    const sel = all.find((x) => x.id === selIndustry)
+    const others = all.filter((x) => x.id !== selIndustry && x.id !== 'all')
+    return [sel, allChip, ...others].filter(Boolean)
   }, [selIndustry])
 
   const cards = useMemo(() => {
@@ -216,42 +223,84 @@ export function Frame2() {
         <div className="mb-2 text-[10px] font-[700] uppercase tracking-[.09em] text-[#bbb]">
           Filter by functional area
         </div>
-        <div className="mb-[18px] flex flex-wrap gap-[6px]">
-          {orderedIndustries.map((ind) => {
-            const cnt =
-              ind.id === 'all'
-                ? Object.values(flattenIndustryRoles('all')).length
-                : (flattenIndustryRoles(ind.id) || []).length
-            const isMatch =
-              (s.dTarFunc === ind.id && ind.id !== 'all') ||
-              (s.func === ind.id && ind.id !== 'all') ||
-              (mappingInsight.primaryIndustryId === ind.id && ind.id !== 'all')
-            const on = selIndustry === ind.id
-            return (
+        <div className="relative mb-[18px]">
+          <div
+            id="functional-area-pills"
+            className={[
+              'flex gap-[6px]',
+              industryRowExpanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden',
+            ].join(' ')}
+          >
+            {orderedIndustries.map((ind) => {
+              const cnt =
+                ind.id === 'all'
+                  ? Object.values(flattenIndustryRoles('all')).length
+                  : (flattenIndustryRoles(ind.id) || []).length
+              const isMatch =
+                (s.dTarFunc === ind.id && ind.id !== 'all') ||
+                (s.func === ind.id && ind.id !== 'all') ||
+                (mappingInsight.primaryIndustryId === ind.id && ind.id !== 'all')
+              const on = selIndustry === ind.id
+              return (
+                <button
+                  key={ind.id}
+                  type="button"
+                  className={[
+                    'relative inline-flex shrink-0 items-center gap-[6px] rounded-[50px] border-[1.5px] px-[13px] py-[7px] text-[11px] font-[700] transition-all duration-200',
+                    on
+                      ? 'border-[#37017B] bg-[#37017B] text-white shadow-[0_3px_14px_rgba(55,1,123,.35)]'
+                      : 'border-[rgba(0,0,0,.07)] bg-white text-[#888] hover:border-[rgba(55,1,123,.14)] hover:text-[#37017B]',
+                  ].join(' ')}
+                  onClick={() => {
+                    setSelIndustry(ind.id)
+                    setSelRole(null)
+                  }}
+                >
+                  {isMatch && !on && ind.id !== 'all' && (
+                    <span className="absolute right-[-2px] top-[-2px] h-[7px] w-[7px] rounded-full border-[1.5px] border-[#FAF9F4] bg-[#48DB85]" />
+                  )}
+                  <span className={on ? 'opacity-100' : ''}>
+                    {ind.ico} {ind.n}{' '}
+                  </span>
+                  <span
+                    className={[
+                      'text-[10px] font-[700] opacity-65',
+                      on ? 'text-white/90 opacity-100' : '',
+                    ].join(' ')}
+                  >
+                    ({cnt})
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {!industryRowExpanded ? (
+            <>
+              <div
+                className="pointer-events-none absolute inset-y-0 right-0 z-[1] w-[52px] bg-[linear-gradient(90deg,rgba(250,249,244,0)_0%,rgba(250,249,244,.75)_45%,#FAF9F4_88%)]"
+                aria-hidden
+              />
               <button
-                key={ind.id}
-                className={[
-                  'relative inline-flex items-center gap-[6px] rounded-[50px] border-[1.5px] border-[rgba(0,0,0,.07)] bg-white px-[13px] py-[7px] text-[11px] font-[700] text-[#888] transition-all duration-200',
-                  'hover:border-[rgba(55,1,123,.14)] hover:text-[#37017B]',
-                  on
-                    ? 'border-[rgba(55,1,123,.24)] bg-[rgba(55,1,123,.1)] text-[#37017B] shadow-[0_2px_10px_rgba(55,1,123,.08)]'
-                    : '',
-                ].join(' ')}
-                onClick={() => {
-                  setSelIndustry(ind.id)
-                  setSelRole(null)
-                }}
+                type="button"
+                className="absolute inset-y-0 right-0 z-[2] flex w-[42px] items-center justify-center pr-[2px] text-[15px] font-[900] leading-none text-[#37017B] transition-opacity hover:opacity-80"
+                aria-expanded={false}
+                aria-controls="functional-area-pills"
+                onClick={() => setIndustryRowExpanded(true)}
+                title="Show all functional areas"
               >
-                {isMatch && !on && ind.id !== 'all' && (
-                  <span className="absolute right-[-2px] top-[-2px] h-[7px] w-[7px] rounded-full border-[1.5px] border-[#FAF9F4] bg-[#48DB85]" />
-                )}
-                {ind.ico} {ind.n}{' '}
-                <span className={['text-[10px] font-[700] opacity-65', on ? 'text-[#37017B] opacity-100' : ''].join(' ')}>
-                  ({cnt})
-                </span>
+                &gt;
               </button>
-            )
-          })}
+            </>
+          ) : (
+            <button
+              type="button"
+              className="mt-[10px] text-[11px] font-[800] text-[#37017B] underline decoration-[rgba(55,1,123,.35)] underline-offset-2 hover:decoration-[#37017B]"
+              onClick={() => setIndustryRowExpanded(false)}
+            >
+              Show less
+            </button>
+          )}
         </div>
 
         <div className="grid max-h-[580px] grid-cols-1 gap-[13px] overflow-y-auto pr-1 md:grid-cols-2 lg:grid-cols-3">
@@ -477,14 +526,16 @@ export function Frame2() {
         </div>
       </div>
 
-      <PathLoader
-        open={pathLoading}
-        role={selRole || 'your goal'}
-        onDone={() => {
-          setPathLoading(false)
-          nav('/3')
-        }}
-      />
+      {pathLoading ? (
+        <PathLoader
+          open
+          role={selRole || 'your goal'}
+          onDone={() => {
+            setPathLoading(false)
+            nav('/3')
+          }}
+        />
+      ) : null}
     </section>
   )
 }

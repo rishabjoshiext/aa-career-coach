@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { cn } from '../../utils/cn.js'
 
 const LINES = [
   'Mapping the journey for <strong>{role}</strong>…',
@@ -19,12 +20,16 @@ function fill(line, vars) {
 }
 
 export function PathLoader({ role, open, onDone, title = 'Building your career paths…', durationMs = 10500 }) {
-  const [idx, setIdx] = useState(0)
-  const [slot, setSlot] = useState('a') // a|b active
+  const glowFilterId = useId().replace(/:/g, '')
   const [aState, setAState] = useState({ html: '', cls: '' })
   const [bState, setBState] = useState({ html: '', cls: '' })
   const intRef = useRef(null)
   const doneRef = useRef(null)
+  const onDoneRef = useRef(onDone)
+
+  useEffect(() => {
+    onDoneRef.current = onDone
+  }, [onDone])
 
   const vars = useMemo(() => {
     const r = role || 'your goal'
@@ -37,26 +42,28 @@ export function PathLoader({ role, open, onDone, title = 'Building your career p
     }
   }, [role])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return undefined
 
-    setIdx(0)
-    setSlot('a')
+    // Run before paint so the first subline is visible on the opening frame.
+    /* eslint-disable react-hooks/set-state-in-effect -- intentional bootstrap in useLayoutEffect */
     setAState({ html: fill(LINES[0], vars), cls: 'in' })
     setBState({ html: '', cls: '' })
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     let i = 1
+    /** Alternate which caption slot receives the next line (avoids stale `slot` state in the interval). */
+    let nextIsB = true
+
     intRef.current = window.setInterval(() => {
       const html = fill(LINES[i % LINES.length], vars)
-      if (slot === 'a') {
+      if (nextIsB) {
         setBState({ html, cls: '' })
-        // force tick
         window.requestAnimationFrame(() => {
           setBState({ html, cls: 'in' })
           setAState((p) => ({ ...p, cls: 'out' }))
           window.setTimeout(() => setAState((p) => ({ ...p, cls: '' })), 760)
         })
-        setSlot('b')
       } else {
         setAState({ html, cls: '' })
         window.requestAnimationFrame(() => {
@@ -64,14 +71,13 @@ export function PathLoader({ role, open, onDone, title = 'Building your career p
           setBState((p) => ({ ...p, cls: 'out' }))
           window.setTimeout(() => setBState((p) => ({ ...p, cls: '' })), 760)
         })
-        setSlot('a')
       }
+      nextIsB = !nextIsB
       i += 1
-      setIdx(i)
     }, 1900)
 
     doneRef.current = window.setTimeout(() => {
-      onDone?.()
+      onDoneRef.current?.()
     }, durationMs)
 
     return () => {
@@ -80,90 +86,118 @@ export function PathLoader({ role, open, onDone, title = 'Building your career p
       intRef.current = null
       doneRef.current = null
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  }, [open, vars, durationMs])
 
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[900] flex flex-col items-center justify-center bg-[linear-gradient(145deg,#080010,#0C0C0C)]">
-      <div className="flex flex-col items-center">
-        <svg className="h-[110px] w-[560px] max-w-[92vw]" viewBox="0 0 560 110">
+    <div className="fixed inset-0 z-[900] flex flex-col items-center justify-center bg-[linear-gradient(155deg,#1a0a2e_0%,#0d0518_38%,#080010_72%,#0c0c0c_100%)]">
+      <div className="flex flex-col items-center px-4">
+        <svg
+          key={role}
+          className="h-[110px] w-[560px] max-w-[92vw]"
+          viewBox="0 0 560 110"
+          aria-hidden
+        >
           <defs>
-            <filter id="pg">
-              <feGaussianBlur stdDeviation="3" result="b" />
+            <filter id={glowFilterId} x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="2.5" result="b" />
               <feMerge>
                 <feMergeNode in="b" />
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
           </defs>
+          {/* Top: subtle grey arc */}
           <path
+            pathLength={1}
             d="M 40,55 C 100,55 110,18 180,18 L 520,18"
             fill="none"
-            stroke="#444"
+            stroke="#6b6b6b"
             strokeWidth="1.5"
-            className="[stroke-dasharray:2000] [stroke-dashoffset:2000] motion-safe:animate-[drawLine_2.6s_ease_forwards]"
+            strokeLinecap="round"
+            strokeDasharray={1}
+            strokeDashoffset={1}
+            className="motion-safe:animate-[pathDraw_2.5s_cubic-bezier(.4,0,.2,1)_forwards]"
           />
+          {/* Middle: primary purple straight path */}
           <path
+            pathLength={1}
             d="M 40,55 L 520,55"
             fill="none"
             stroke="#37017B"
             strokeWidth="2"
-            className="[stroke-dasharray:1600] [stroke-dashoffset:1600] motion-safe:animate-[drawLine_2.4s_ease_.7s_forwards]"
+            strokeLinecap="round"
+            strokeDasharray={1}
+            strokeDashoffset={1}
+            className="motion-safe:animate-[pathDraw_2.2s_cubic-bezier(.4,0,.2,1)_0.65s_forwards]"
           />
+          {/* Bottom: glowing accent path */}
           <path
+            pathLength={1}
             d="M 40,55 C 100,55 110,90 180,90 L 440,90"
             fill="none"
             stroke="#7504FF"
             strokeWidth="3"
-            filter="url(#pg)"
-            className="[stroke-dasharray:1200] [stroke-dashoffset:1200] motion-safe:animate-[drawLine_2.2s_ease_1.3s_forwards]"
+            strokeLinecap="round"
+            strokeDasharray={1}
+            strokeDashoffset={1}
+            filter={`url(#${glowFilterId})`}
+            className="motion-safe:animate-[pathDraw_2s_cubic-bezier(.4,0,.2,1)_1.15s_forwards]"
           />
-          <circle cx="40" cy="55" r="7" fill="rgba(250,249,244,0.15)" stroke="rgba(250,249,244,0.5)" strokeWidth="1.5" />
+          <circle cx="40" cy="55" r="6" fill="#37017B" stroke="#FAF9F4" strokeWidth="2" />
           <circle
             cx="520"
             cy="18"
-            r="5"
-            fill="#444"
+            r="4"
+            fill="#888"
             opacity="0"
-            className="motion-safe:animate-[fadeIn_.3s_ease_1.8s_forwards]"
+            className="motion-safe:animate-[fadeIn_.35s_ease_1.75s_forwards]"
           />
           <circle
             cx="520"
             cy="55"
-            r="6"
+            r="5"
             fill="#37017B"
+            stroke="#FAF9F4"
+            strokeWidth="1.5"
             opacity="0"
-            className="motion-safe:animate-[fadeIn_.3s_ease_2s_forwards]"
+            className="motion-safe:animate-[fadeIn_.35s_ease_1.95s_forwards]"
           />
           <circle
             cx="440"
             cy="90"
-            r="8"
+            r="7"
             fill="#7504FF"
+            stroke="#FAF9F4"
+            strokeWidth="1.5"
             opacity="0"
-            className="motion-safe:animate-[fadeIn_.4s_ease_2.2s_forwards]"
+            className="motion-safe:animate-[fadeIn_.4s_ease_2.15s_forwards]"
           />
         </svg>
 
-        <div className="mt-5 text-center text-[22px] [font-family:'DM Serif Display',serif] text-[#FAF9F4]">{title}</div>
+        <div className="mt-5 text-center text-[22px] font-[600] leading-snug tracking-[-0.02em] text-[#FAF9F4] [font-family:'DM Serif Display',serif]">
+          {title}
+        </div>
 
-        <div className="relative mt-[14px] h-[38px] w-full max-w-[640px] overflow-hidden">
+        {/* Rotating sublines (v6-style). twMerge avoids opacity-0 + opacity-100 both applying. */}
+        <div className="relative mt-[12px] min-h-[5.5rem] w-full max-w-[640px] overflow-hidden px-2">
           <div
-            className={[
-              'absolute inset-0 flex items-center justify-center px-4 text-center text-[16px] font-[500] leading-[1.35] tracking-[-.005em] text-[rgba(250,249,244,.72)] opacity-0 transition-[transform,opacity] duration-700 [transition-timing-function:cubic-bezier(.4,0,.2,1)] [will-change:transform,opacity] translate-y-full',
-              aState.cls === 'in' ? 'translate-y-0 opacity-100' : '',
-              aState.cls === 'out' ? '-translate-y-full opacity-0' : '',
-            ].join(' ')}
+            className={cn(
+              'path-loader-caption absolute inset-0 flex items-center justify-center px-3 text-center text-[14px] font-[500] leading-[1.5] tracking-[-.01em] text-[#b8b5ad] transition-[transform,opacity] duration-700 [transition-timing-function:cubic-bezier(.4,0,.2,1)] [font-family:Outfit,system-ui,sans-serif] [&_strong]:font-[700] [&_strong]:text-[#f5f4ef]',
+              aState.cls === 'in' && 'translate-y-0 opacity-100',
+              aState.cls === 'out' && '-translate-y-full opacity-0',
+              (aState.cls === '' || !aState.cls) && 'translate-y-full opacity-0',
+            )}
             dangerouslySetInnerHTML={{ __html: aState.html }}
           />
           <div
-            className={[
-              'absolute inset-0 flex items-center justify-center px-4 text-center text-[16px] font-[500] leading-[1.35] tracking-[-.005em] text-[rgba(250,249,244,.72)] opacity-0 transition-[transform,opacity] duration-700 [transition-timing-function:cubic-bezier(.4,0,.2,1)] [will-change:transform,opacity] translate-y-full',
-              bState.cls === 'in' ? 'translate-y-0 opacity-100' : '',
-              bState.cls === 'out' ? '-translate-y-full opacity-0' : '',
-            ].join(' ')}
+            className={cn(
+              'path-loader-caption absolute inset-0 flex items-center justify-center px-3 text-center text-[14px] font-[500] leading-[1.5] tracking-[-.01em] text-[#b8b5ad] transition-[transform,opacity] duration-700 [transition-timing-function:cubic-bezier(.4,0,.2,1)] [font-family:Outfit,system-ui,sans-serif] [&_strong]:font-[700] [&_strong]:text-[#f5f4ef]',
+              bState.cls === 'in' && 'translate-y-0 opacity-100',
+              bState.cls === 'out' && '-translate-y-full opacity-0',
+              (bState.cls === '' || !bState.cls) && 'translate-y-full opacity-0',
+            )}
             dangerouslySetInnerHTML={{ __html: bState.html }}
           />
         </div>
@@ -177,4 +211,3 @@ export function PathLoader({ role, open, onDone, title = 'Building your career p
     </div>
   )
 }
-
