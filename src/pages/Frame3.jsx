@@ -534,18 +534,49 @@ export function Frame3() {
   }, [journeyIntroLoading, d])
 
   const downloadJourneyPdf = async () => {
-    if (!vpRef.current) return
+    const el = canvasRef.current
+    const vp = vpRef.current
+    if (!el || !vp) return
+
+    // Save inline styles that we'll temporarily override
+    const savedTransform = el.style.transform
+    const savedTransformOrigin = el.style.transformOrigin
+
     try {
-      const canvas = await html2canvas(canvasRef.current, {
+      // Strip the zoom/pan transform so html2canvas sees the element at natural size.
+      // html2canvas does not reliably handle translate3d + scale, causing missing content.
+      el.style.transform = 'none'
+      el.style.transformOrigin = '0 0'
+      // Allow the full canvas width to be visible (parent has overflow:hidden via class)
+      vp.style.overflow = 'visible'
+
+      // Let the browser apply the style changes before capturing
+      await new Promise((r) => window.setTimeout(r, 80))
+
+      const captured = await html2canvas(el, {
         backgroundColor: '#0C0C0C',
         scale: 2,
         useCORS: true,
+        allowTaint: true,
+        logging: false,
+        width: pathTrack.canvasW,
+        height: 520,
+        x: 0,
+        y: 0,
+        scrollX: 0,
+        scrollY: 0,
       })
-      const imgData = canvas.toDataURL('image/png')
+
+      // Restore
+      el.style.transform = savedTransform
+      el.style.transformOrigin = savedTransformOrigin
+      vp.style.overflow = ''
+
+      const imgData = captured.toDataURL('image/png')
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
       const w = pdf.internal.pageSize.getWidth()
       const h = pdf.internal.pageSize.getHeight()
-      const ratio = canvas.width / canvas.height
+      const ratio = captured.width / captured.height
       let targetW = w - 10
       let targetH = targetW / ratio
       if (targetH > h - 10) {
@@ -555,6 +586,10 @@ export function Frame3() {
       pdf.addImage(imgData, 'PNG', (w - targetW) / 2, (h - targetH) / 2, targetW, targetH)
       pdf.save(`journey-${roleTitle.replace(/\s+/g, '-').toLowerCase()}.pdf`)
     } catch (err) {
+      // Always restore even on failure
+      el.style.transform = savedTransform
+      el.style.transformOrigin = savedTransformOrigin
+      vp.style.overflow = ''
       console.error('Failed to export journey PDF', err)
     }
   }
