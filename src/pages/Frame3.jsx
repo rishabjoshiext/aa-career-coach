@@ -1,13 +1,17 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, startTransition } from 'react'
 import { useNavigate } from 'react-router-dom'
-import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
+import { captureJourneyElement } from '../utils/exportJourneyPdf.js'
 import { Button } from '../components/ui/Button.jsx'
 import { useAppState } from '../hooks/appState.jsx'
 import { RunLoadOverlay } from '../components/loaders/RunLoadOverlay.jsx'
 import { PD } from '../utils/pathData.js'
 import { resolvePdRole } from '../utils/roleKey.js'
 import { resolveJourneySourceCard } from '../utils/journeySourceCard.js'
+import {
+  PATH_MILESTONE_COUNTS,
+  buildJourneyFromProgressionEngine,
+} from '../journey/progressionEngine.js'
 import { JOB_LISTINGS, logoKey } from '../utils/jobsData.js'
 import { JobDetailModal } from '../components/modals/JobDetailModal.jsx'
 
@@ -20,145 +24,15 @@ const PATHS = [
 
 const PY = { trad: 90, fast: 270, accel: 450 }
 const PCOL = { trad: '#888', fast: '#FFD700', accel: '#48DB85' }
-/** Visual hierarchy: Traditional has the most milestones, then Fast Track, then Accelerated. */
-const PATH_NODE_COUNTS = { trad: 6, fast: 4, accel: 3 }
+/** Future milestone cards per path (NOW circle is separate). */
+const PATH_NODE_COUNTS = {
+  trad: PATH_MILESTONE_COUNTS.traditional,
+  fast: PATH_MILESTONE_COUNTS.fastTrack,
+  accel: PATH_MILESTONE_COUNTS.accelerated,
+}
 
 function jobsForRole(roleName) {
   return JOB_LISTINGS[roleName] || []
-}
-
-function parseMonthlyBand(salText) {
-  const s = String(salText || '')
-  const nums = s.match(/(\d+(?:\.\d+)?)([kKlL]?)/g) || []
-  const vals = nums
-    .map((n) => {
-      const m = n.match(/(\d+(?:\.\d+)?)([kKlL]?)/)
-      if (!m) return null
-      const v = Number(m[1])
-      const u = m[2].toLowerCase()
-      if (u === 'l') return Math.round(v * 100000)
-      if (u === 'k') return Math.round(v * 1000)
-      return Math.round(v)
-    })
-    .filter(Boolean)
-  if (!vals.length) return { min: 35000, max: 65000 }
-  if (vals.length === 1) return { min: vals[0], max: Math.round(vals[0] * 1.2) }
-  return { min: Math.min(vals[0], vals[1]), max: Math.max(vals[0], vals[1]) }
-}
-
-function formatBand(min, max) {
-  const k1 = Math.round(min / 1000)
-  const k2 = Math.round(max / 1000)
-  return `₹${k1}–${k2}k/mo`
-}
-
-function mkNode(r, yr, brief, sal, isGoal = false) {
-  return {
-    r,
-    yr,
-    brief,
-    sal,
-    goal: isGoal,
-    detail: {
-      lifestyle: isGoal
-        ? 'Destination stage. Compensation and role complexity accelerate.'
-        : 'Progressive skill and responsibility growth at this stage.',
-      what: [
-        `Deliver outcomes as ${r}`,
-        'Build stakeholder trust through measurable impact',
-        'Strengthen role-specific execution quality',
-        'Document outcomes for faster promotions/interviews',
-      ],
-      skills: ['Domain depth', 'Execution', 'Communication', 'Problem solving'],
-    },
-  }
-}
-
-function bandAtProgress(min, max, t) {
-  const lo = Math.round(min + (max - min) * Math.max(0, t - 0.12) * 0.85)
-  const hi = Math.round(min + (max - min) * Math.min(1, t + 0.08))
-  return formatBand(Math.min(lo, hi), Math.max(lo, hi))
-}
-
-function buildPathRungs({ count, yearsTotal, target, desc, min, max, currentRole, pathKey }) {
-  const rungs = []
-  const tiers = ['Associate', 'Analyst', 'Specialist', 'Senior', 'Lead']
-  for (let i = 0; i < count; i += 1) {
-    const isGoal = i === count - 1
-    const t = count === 1 ? 1 : i / (count - 1)
-    const yr = Math.max(0.6, +(yearsTotal * t).toFixed(1))
-    const sal = bandAtProgress(min, max, 0.35 + t * 0.62)
-    if (isGoal) {
-      rungs.push(mkNode(target, yr, desc, formatBand(min, max), true))
-      continue
-    }
-    if (pathKey === 'accel' && i === 0) {
-      rungs.push(
-        mkNode(
-          `${(currentRole || 'Current').slice(0, 22)} + Upskilling`,
-          yr,
-          'Parallel work + credential build; weekends / online',
-          bandAtProgress(min, max, 0.32),
-          false,
-        ),
-      )
-      continue
-    }
-    const tier = tiers[Math.min(i, tiers.length - 1)]
-    rungs.push(mkNode(`${target} ${tier}`, yr, 'Progressive skill and responsibility growth at this stage.', sal, false))
-  }
-  return rungs
-}
-
-function deterministicJourney(card, currentRole = 'Current Role') {
-  const target = card?.role || 'Career Destination'
-  const desc = card?.desc || 'Progress toward target destination'
-  const yrs = {
-    trad: Number(card?.tradYrs) || 8,
-    fast: Number(card?.fastYrs) || 5,
-    accel: Number(card?.accelYrs) || 3,
-  }
-  const { min, max } = parseMonthlyBand(card?.sal)
-  const nTrad = PATH_NODE_COUNTS.trad
-  const nFast = PATH_NODE_COUNTS.fast
-  const nAccel = PATH_NODE_COUNTS.accel
-  return {
-    trad: { yrs: yrs.trad, label: 'Traditional' },
-    fast: { yrs: yrs.fast, label: 'Fast Track' },
-    accel: { yrs: yrs.accel, label: 'Accelerated' },
-    nodes: {
-      trad: buildPathRungs({
-        count: nTrad,
-        yearsTotal: yrs.trad,
-        target,
-        desc,
-        min,
-        max,
-        currentRole,
-        pathKey: 'trad',
-      }),
-      fast: buildPathRungs({
-        count: nFast,
-        yearsTotal: yrs.fast,
-        target,
-        desc,
-        min,
-        max,
-        currentRole,
-        pathKey: 'fast',
-      }),
-      accel: buildPathRungs({
-        count: nAccel,
-        yearsTotal: yrs.accel,
-        target,
-        desc,
-        min,
-        max,
-        currentRole,
-        pathKey: 'accel',
-      }),
-    },
-  }
 }
 
 function journeyHasCanonicalLengths(j) {
@@ -170,16 +44,10 @@ function journeyHasCanonicalLengths(j) {
   )
 }
 
-/** PD / AI may ship other lengths — coerce to canonical 6 / 4 / 3 so layout + hierarchy stay consistent. */
-function ensureCanonicalJourney(raw, card, currentRole) {
-  if (raw && journeyHasCanonicalLengths(raw)) return raw
-  return deterministicJourney(card, currentRole)
-}
-
-function stripJsonFence(text) {
-  const t = String(text || '').trim()
-  const m = t.match(/^```(?:json)?\s*([\s\S]*?)```$/i)
-  return m ? m[1].trim() : t
+/** Hand-tuned PD or engine output — coerce to canonical 6 / 5 / 3 milestones. */
+function ensureCanonicalJourney(raw, card, currentRole, profile) {
+  if (raw && journeyHasCanonicalLengths(raw)) return enrichJourneyDetails(raw)
+  return buildJourneyFromProgressionEngine(card, currentRole, profile)
 }
 
 function defaultNodeDetail() {
@@ -210,67 +78,6 @@ function enrichJourneyDetails(parsed) {
   return out
 }
 
-/** Reject OpenAI output that drifts to the wrong destination (e.g. Finance when user picked Product). */
-function validateJourneyForTarget(parsed, targetRole) {
-  const want = String(targetRole || '').trim()
-  if (!parsed || !want) return null
-  const { trad: nt, fast: nf, accel: na } = PATH_NODE_COUNTS
-  for (const pk of ['trad', 'fast', 'accel']) {
-    const nodes = parsed.nodes?.[pk]
-    const expected = pk === 'trad' ? nt : pk === 'fast' ? nf : na
-    if (!Array.isArray(nodes) || nodes.length !== expected) return null
-    const last = nodes[nodes.length - 1]
-    if (!last.goal) return null
-    if (String(last.r || '').trim() !== want) return null
-    if (!parsed[pk]?.yrs || typeof parsed[pk].yrs !== 'number') return null
-  }
-  return enrichJourneyDetails(parsed)
-}
-
-async function generateJourneyWithOpenAI(card, currentRole) {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY
-  if (!apiKey) return null
-  const target = String(card?.role || '').trim()
-  const prompt = `Generate only valid JSON for a career journey map in India.
-
-Target destination role (exact final title): ${target}
-Role description: ${card.desc || '—'}
-Traditional years: ${card.tradYrs}
-Fast years: ${card.fastYrs}
-Accelerated years: ${card.accelYrs}
-Target salary band: ${card.sal}
-Current role: ${currentRole || 'Current Role'}
-
-Output JSON shape:
-{"trad":{"yrs":number,"label":"Traditional"},"fast":{"yrs":number,"label":"Fast Track"},"accel":{"yrs":number,"label":"Accelerated"},"nodes":{"trad":[...EXACTLY 6 nodes...],"fast":[...EXACTLY 4 nodes...],"accel":[...EXACTLY 3 nodes...]}}
-
-Each node: r, yr, brief, sal, detail object with lifestyle (string), what (array of 4 strings), skills (array of 4 strings).
-The three paths MUST have different lengths: traditional has the most steps (6), fast track fewer (4), accelerated the fewest (3).
-CRITICAL: In EVERY path, the LAST node must have goal=true and the field r must be EXACTLY "${target}" (same spelling and spacing). Intermediate roles must be realistic steps toward ${target}, not a different profession.`
-  try {
-    const resp = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4.1-mini',
-        input: prompt,
-        temperature: 0.2,
-      }),
-    })
-    if (!resp.ok) return null
-    const data = await resp.json()
-    const text = data?.output_text || ''
-    if (!text) return null
-    const parsed = JSON.parse(stripJsonFence(text))
-    return validateJourneyForTarget(parsed, target)
-  } catch {
-    return null
-  }
-}
-
 export function Frame3() {
   const nav = useNavigate()
   const { s, selRole, selIndustry } = useAppState()
@@ -282,18 +89,17 @@ export function Frame3() {
     [selRole, selIndustry, s],
   )
 
-  const [dynJourney, setDynJourney] = useState(null)
-
   const pdStatic = PD[roleTitle] || null
-  const deterministicFallback = useMemo(
-    () => deterministicJourney(journeyCard, s.role || ''),
-    [journeyCard, s.role],
+
+  const engineJourney = useMemo(
+    () => buildJourneyFromProgressionEngine(journeyCard, s.role || '', s),
+    [journeyCard, s],
   )
 
   const d = useMemo(() => {
-    const raw = dynJourney || pdStatic || deterministicFallback
-    return ensureCanonicalJourney(raw, journeyCard, s.role || '')
-  }, [dynJourney, pdStatic, deterministicFallback, journeyCard, s.role])
+    const raw = pdStatic && journeyHasCanonicalLengths(pdStatic) ? pdStatic : engineJourney
+    return ensureCanonicalJourney(raw, journeyCard, s.role || '', s)
+  }, [pdStatic, engineJourney, journeyCard, s])
 
   const pathTrack = useMemo(() => {
     const m = Math.max(d.nodes.trad.length, d.nodes.fast.length, d.nodes.accel.length)
@@ -472,25 +278,10 @@ export function Frame3() {
   }, [selectedDetail])
 
   useEffect(() => {
-    let alive = true
-    const run = async () => {
-      setJourneyIntroLoading(true)
-      if (pdStatic) {
-        setDynJourney(null)
-        window.setTimeout(() => alive && setJourneyIntroLoading(false), 1200)
-        return
-      }
-      setDynJourney(null)
-      const aiJourney = await generateJourneyWithOpenAI(journeyCard, s.role)
-      if (!alive) return
-      setDynJourney(aiJourney || null)
-      window.setTimeout(() => alive && setJourneyIntroLoading(false), 1200)
-    }
-    run()
-    return () => {
-      alive = false
-    }
-  }, [roleTitle, pdStatic, journeyCard, s.role])
+    startTransition(() => setJourneyIntroLoading(true))
+    const tid = window.setTimeout(() => setJourneyIntroLoading(false), 900)
+    return () => window.clearTimeout(tid)
+  }, [roleTitle, journeyCard, s.role])
 
   useLayoutEffect(() => {
     for (const t of staggerTimersRef.current) window.clearTimeout(t)
@@ -532,13 +323,19 @@ export function Frame3() {
   }, [journeyIntroLoading, d])
 
   const downloadJourneyPdf = async () => {
-    if (!vpRef.current) return
+    const el = canvasRef.current
+    if (!el) return
+    const prev = { filter, zoom: { ...zoom } }
     try {
-      const canvas = await html2canvas(canvasRef.current, {
-        backgroundColor: '#0C0C0C',
-        scale: 2,
-        useCORS: true,
-      })
+      for (const t of staggerTimersRef.current) window.clearTimeout(t)
+      staggerTimersRef.current = []
+      setSkeletonKeys(new Set())
+      setFilter('all')
+      setZoom({ s: 1, tx: 0, ty: 0, target_s: 1, target_tx: 0, target_ty: 0 })
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+      await new Promise((r) => window.setTimeout(r, 400))
+
+      const canvas = await captureJourneyElement(el)
       const imgData = canvas.toDataURL('image/png')
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
       const w = pdf.internal.pageSize.getWidth()
@@ -554,6 +351,14 @@ export function Frame3() {
       pdf.save(`journey-${roleTitle.replace(/\s+/g, '-').toLowerCase()}.pdf`)
     } catch (err) {
       console.error('Failed to export journey PDF', err)
+    } finally {
+      setFilter(prev.filter)
+      setZoom({
+        ...prev.zoom,
+        target_s: prev.zoom.s,
+        target_tx: prev.zoom.tx,
+        target_ty: prev.zoom.ty,
+      })
     }
   }
 
@@ -663,6 +468,8 @@ export function Frame3() {
                   return (
                     <button
                       key={tileKey}
+                      type="button"
+                      data-journey-milestone
                       className={[
                         'absolute w-[176px] select-none rounded-[11px] border-[1.5px] px-[13px] py-[11px] text-left transition-[opacity,transform,box-shadow,border-color,background-color] duration-200 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)]',
                         !isActive || showTileSk ? 'pointer-events-none' : 'cursor-pointer',

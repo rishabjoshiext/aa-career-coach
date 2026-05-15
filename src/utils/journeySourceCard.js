@@ -5,6 +5,7 @@
 
 import { inferIndustryFromFreeText, inferIndustryFromProfileStrings, roleTrajectoryScore } from './destinationMapping.js'
 import { flattenIndustryRoles } from './fasttrackData.js'
+import { findRoleMetadataByTitle, matchCareerAreaByRoleTitle } from '../data/potentialCareerData.js'
 
 const DEFAULT_CARD = {
   role: 'Your goal',
@@ -31,9 +32,23 @@ function defaultYearsAndSalForInference(ind) {
   return map[ind] || { tradYrs: 8, fastYrs: 5, accelYrs: 4, sal: '₹45–85k' }
 }
 
+function attachDestinationMeta(card, title) {
+  const metaHit = findRoleMetadataByTitle(title)
+  if (!metaHit) {
+    const area = card.industry || matchCareerAreaByRoleTitle(title)
+    return { ...card, category: card.category || area, industry: card.industry || area }
+  }
+  return {
+    ...card,
+    industry: metaHit.areaName,
+    category: metaHit.areaName,
+    destinationMeta: metaHit.roleRow,
+  }
+}
+
 /**
  * @param {{ selRole: string | null, selIndustry?: string, profile?: { ind?: string, role?: string, dSalary?: number } }}} p
- * @returns {object} Card shape expected by deterministicJourney / OpenAI (role, desc, tradYrs, fastYrs, accelYrs, sal, …)
+ * @returns {object} Card shape for progression engine (role, desc, tradYrs, fastYrs, accelYrs, sal, category, …)
  */
 export function resolveJourneySourceCard({ selRole, selIndustry, profile }) {
   const title = String(selRole || '').trim()
@@ -45,10 +60,10 @@ export function resolveJourneySourceCard({ selRole, selIndustry, profile }) {
   const scoped = selIndustry && selIndustry !== 'all' ? flattenIndustryRoles(selIndustry) : all
 
   const exactScoped = scoped.find((c) => c.role === title)
-  if (exactScoped) return exactScoped
+  if (exactScoped) return attachDestinationMeta(exactScoped, title)
 
   const exactAll = all.find((c) => c.role === title)
-  if (exactAll) return exactAll
+  if (exactAll) return attachDestinationMeta(exactAll, title)
 
   let best = null
   let bestSc = 0
@@ -70,24 +85,46 @@ export function resolveJourneySourceCard({ selRole, selIndustry, profile }) {
     (/\bproduct\b/i.test(title) ? 'Product' : null)
 
   if (bestSc >= 0.26 && best) {
-    return {
-      ...best,
-      role: title,
-      desc: best.desc || `Progression toward ${title}`,
-    }
+    return attachDestinationMeta(
+      {
+        ...best,
+        role: title,
+        desc: best.desc || `Progression toward ${title}`,
+      },
+      title,
+    )
   }
 
   if (inferred === 'Product') {
     const pm = all.find((c) => c.role === 'Product Manager')
     if (pm) {
-      return { ...pm, role: title, desc: pm.desc || `Leadership track toward ${title}` }
+      return attachDestinationMeta(
+        { ...pm, role: title, desc: pm.desc || `Leadership track toward ${title}` },
+        title,
+      )
     }
   }
 
-  const y = defaultYearsAndSalForInference(inferred)
+  const metaHit = findRoleMetadataByTitle(title)
+  if (metaHit) {
+    const fromJson = flattenIndustryRoles(metaHit.areaName).find((c) => c.role === metaHit.roleRow.title)
+    if (fromJson) {
+      return {
+        ...fromJson,
+        role: title,
+        desc: fromJson.desc || metaHit.roleRow.description || `Progression toward ${title}`,
+        industry: metaHit.areaName,
+        category: metaHit.areaName,
+        destinationMeta: metaHit.roleRow,
+      }
+    }
+  }
+
+  const area = matchCareerAreaByRoleTitle(title) || inferred
+  const y = defaultYearsAndSalForInference(area)
   return {
     role: title,
-    desc: `Career arc toward ${title} in the ${inferred || 'chosen'} track — milestones are illustrative.`,
+    desc: `Career arc toward ${title} in the ${area || 'chosen'} track.`,
     tradYrs: y.tradYrs,
     fastYrs: y.fastYrs,
     accelYrs: y.accelYrs,
@@ -96,6 +133,7 @@ export function resolveJourneySourceCard({ selRole, selIndustry, profile }) {
     apnaJobs: '1,000+',
     growth: '+28%',
     dbProfiles: 1200,
-    industry: inferred || selIndustry || 'Other',
+    industry: area || selIndustry || 'Other',
+    category: area || selIndustry || 'Other',
   }
 }

@@ -186,6 +186,29 @@ export function roleRowToDestinationCard(roleRow, areaName) {
  * @param {string} roleTitle
  * @returns {string | null}
  */
+/**
+ * Find JSON role row + area for a destination title.
+ * @param {string} roleTitle
+ * @returns {{ areaName: string, roleRow: object } | null}
+ */
+export function findRoleMetadataByTitle(roleTitle) {
+  const t = String(roleTitle || '').trim()
+  if (!t) return null
+  let best = null
+  let bestScore = 0
+  for (const areaName of JSON_CAREER_AREA_NAMES) {
+    const roles = ROLES_BY_AREA.get(areaName) || []
+    for (const row of roles) {
+      const s = scoreRoleAgainstAnchor(t, row.title)
+      if (s > bestScore) {
+        bestScore = s
+        best = { areaName, roleRow: row }
+      }
+    }
+  }
+  return bestScore >= 0.55 ? best : null
+}
+
 export function matchCareerAreaByRoleTitle(roleTitle) {
   const t = String(roleTitle || '').trim()
   if (!t) return null
