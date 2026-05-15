@@ -11,6 +11,7 @@ import {
   clampToCareerArea,
 } from './potentialCareerAreas.js'
 import { inferCareerAreaFromText } from './potentialCareerAreas.js'
+import { formatCountIN, formatRupeeMonthlyBand } from '../utils/formatINR.js'
 
 export const DESTINATION_PACK_SIZE = 14
 
@@ -129,8 +130,7 @@ function scoreRoleAgainstAnchor(anchor, roleTitle) {
 function formatJobs(n) {
   const num = Number(n)
   if (!Number.isFinite(num) || num <= 0) return '—'
-  if (num >= 1000) return `${Math.round(num / 1000).toLocaleString('en-IN')}k+`
-  return `${num.toLocaleString('en-IN')}+`
+  return `${formatCountIN(num)}+`
 }
 
 function formatCount(n) {
@@ -140,14 +140,8 @@ function formatCount(n) {
 }
 
 function formatSal(minM, maxM) {
-  const fmt = (v) => {
-    if (v >= 100000) return `₹${(v / 100000).toFixed(v % 100000 === 0 ? 0 : 1)}L`
-    if (v >= 1000) return `₹${Math.round(v / 1000)}k`
-    return `₹${v}`
-  }
   if (!minM && !maxM) return '—'
-  if (minM && maxM) return `${fmt(minM)}–${fmt(maxM)}`
-  return fmt(minM || maxM)
+  return formatRupeeMonthlyBand(minM, maxM)
 }
 
 /**

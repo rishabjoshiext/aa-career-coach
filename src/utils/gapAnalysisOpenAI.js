@@ -1,53 +1,7 @@
 import { GAPS_BY_ROLE } from './gapsData.js'
 
-const CAT_KEYS = ['edu', 'skill', 'exp', 'dev']
-
-function stripJsonFence(text) {
-  const t = String(text || '').trim()
-  const m = t.match(/^```(?:json)?\s*([\s\S]*?)```$/i)
-  return m ? m[1].trim() : t
-}
-
-function validPill(p) {
-  return p === 'crit' || p === 'miss' || p === 'need'
-}
-
-function validCls(c) {
-  return c === 'red' || c === 'amber' || c === 'green'
-}
-
-/** Returns true if object matches GAPS_BY_ROLE entry shape */
-export function isValidGapsShape(g) {
-  if (!g || typeof g !== 'object') return false
-  for (const k of CAT_KEYS) {
-    const block = g[k]
-    if (!block || typeof block !== 'object') return false
-    if (typeof block.imp !== 'string' || !block.imp.trim()) return false
-    if (!validCls(block.cls)) return false
-    if (!Array.isArray(block.items) || block.items.length < 1) return false
-    for (const it of block.items) {
-      if (typeof it.n !== 'string' || !it.n.trim()) return false
-      if (typeof it.d !== 'string' || !it.d.trim()) return false
-      if (!validPill(it.pill)) return false
-      if (!Array.isArray(it.actions) || it.actions.length < 1) return false
-      if (it.w != null && typeof it.w !== 'string') return false
-    }
-  }
-  return true
-}
-
-export function normalizeGaps(raw) {
-  try {
-    const parsed = typeof raw === 'string' ? JSON.parse(stripJsonFence(raw)) : raw
-    if (!isValidGapsShape(parsed)) return null
-    return parsed
-  } catch {
-    return null
-  }
-}
-
 /**
- * Deterministic gap set when OpenAI is unavailable — always themed to `targetRole`,
+ * Deterministic gap set — always themed to `targetRole`,
  * never Finance Manager boilerplate unless targetRole is Finance Manager.
  */
 export function buildFallbackGaps(targetRole, card) {
@@ -189,63 +143,6 @@ export function buildFallbackGaps(targetRole, card) {
         },
       ],
     },
-  }
-}
-
-export async function fetchGapAnalysisWithOpenAI({ targetRole, industryLabel, card }) {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY
-  if (!apiKey) return null
-
-  const role = String(targetRole || '').trim() || 'Target role'
-  const ind = industryLabel || 'General'
-  const desc = card?.desc ? String(card.desc) : ''
-  const sal = card?.sal ? String(card.sal) : ''
-
-  const prompt = `You are a career coach for India market. Produce ONLY valid JSON (no markdown) for gap analysis toward ONE destination role.
-
-Destination role: ${role}
-Industry / function context: ${ind}
-Role description (from dataset): ${desc}
-Typical salary band if known: ${sal}
-
-Return JSON with exactly these keys: edu, skill, exp, dev. Each value is an object:
-{ "imp": string (short impact headline like "Delays career by 3.2 years" or "Costs 2 rounds in interviews"),
-  "cls": "red" | "amber" | "green",
-  "items": array of 2-5 objects, each:
-    { "n": string title,
-      "d": string 1-2 sentences why it matters for THIS role,
-      "w": optional string extra warning line,
-      "pill": "crit" | "miss" | "need",
-      "actions": array of exactly 3 concise action strings (India-relevant, realistic)
-    }
-}
-
-Rules:
-- Tailor EVERY line to "${role}" and the industry context — no generic finance/HR filler unless the role is in that domain.
-- edu = formal education & recognised credentials; skill = tools/methods; exp = work scope & tenure-type proof; dev = visibility, network, portfolio, communication habits (label internally as personal development).
-- Use plausible statistics occasionally (e.g. "78% of JDs") but do not invent company names.
-- Mix pills: each category should include at least one "crit" if realistic, and a spread of miss/need.`
-
-  try {
-    const resp = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4.1-mini',
-        input: prompt,
-        temperature: 0.25,
-      }),
-    })
-    if (!resp.ok) return null
-    const data = await resp.json()
-    const text = data?.output_text || ''
-    if (!text) return null
-    return normalizeGaps(text)
-  } catch {
-    return null
   }
 }
 

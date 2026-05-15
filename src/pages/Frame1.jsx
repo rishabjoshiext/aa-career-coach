@@ -151,14 +151,12 @@ export function Frame1() {
   }, [s])
 
   const dreamsReady = useMemo(() => {
-    if (!String(s.dRole || '').trim()) return false
-    if (!Array.isArray(s.dCompanies) || s.dCompanies.length < 1) return false
     if (!s.dMode) return false
     const n = Number(s.dSalary)
     if (!Number.isFinite(n)) return false
     if (n < 5 || n > 50) return false
     return true
-  }, [s.dRole, s.dCompanies, s.dMode, s.dSalary])
+  }, [s.dMode, s.dSalary])
 
   const readyForAnalyse = profileReadyForDreams && dreamsReady
 
@@ -293,7 +291,7 @@ export function Frame1() {
                       What role would feel like a real win 5 years from now?
                     </div>
                   </div>
-                  <Label required>Dream role</Label>
+                  <Label optional>Dream role</Label>
                   <div ref={dRoleWrapRef} className="relative">
                     <div
                       className="min-h-[42px] rounded-[9px] border-[1.5px] border-[rgba(0,0,0,.09)] bg-white px-[11px] py-[8px]"
@@ -351,7 +349,7 @@ export function Frame1() {
                     <div className="text-[13px] font-[800] tracking-[-.01em] text-[#0C0C0C]">Dream Companies</div>
                     <div className="ml-auto text-[10.5px] text-[#bbb]">Pick 1–3</div>
                   </div>
-                  <Label required>Dream companies</Label>
+                  <Label optional>Dream companies</Label>
                   <div ref={dCoWrapRef} className="relative">
                     <div
                       className="min-h-[42px] rounded-[9px] border-[1.5px] border-[rgba(0,0,0,.09)] bg-white px-[11px] py-[8px]"
@@ -512,7 +510,7 @@ export function Frame1() {
                     <span className="text-[11px] font-[600] text-[#b45309]">
                       {!profileReadyForDreams
                         ? 'Profile is incomplete — fix required fields on step 1.'
-                        : 'Complete every aspiration field (*) before analysing.'}
+                        : 'Set target package and preferred mode before analysing.'}
                     </span>
                   ) : null}
                 </div>

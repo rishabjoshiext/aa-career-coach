@@ -1,7 +1,6 @@
 /**
  * Extra destination cards merged with `INDUSTRY_ROLES` (same field shape as fasttrackData).
- * Curated manually for gaps (e.g. senior data / analytics titles). Regenerate or extend via
- * `scripts/generate-destination-cards.mjs` + OpenAI when you want to bulk-add more.
+ * Curated manually for gaps (e.g. senior data / analytics titles). Add entries here by following the same field shape as `fasttrackData`.
  */
 
 import { cloneRoleCard } from '../utils/fasttrackData.js'

@@ -9,7 +9,6 @@ import {
   buildFallbackStories,
   conservativeHikePct,
   conservativePlacedPct,
-  fetchStoriesWithOpenAI,
   liveReviewersCount,
 } from '../utils/socialStoriesData.js'
 
@@ -49,12 +48,7 @@ export function Frame6() {
     let cancelled = false
     async function load() {
       setLoading(true)
-      const ai = await fetchStoriesWithOpenAI({
-        destinationTitle: roleTitle,
-        industryLabel,
-        card: roleCard,
-      })
-      const list = ai && ai.length >= 8 ? ai.slice(0, 8) : buildFallbackStories(destinationTitle)
+      const list = buildFallbackStories(destinationTitle)
       if (!cancelled) {
         setStories(list)
         setLoading(false)

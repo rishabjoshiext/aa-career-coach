@@ -14,6 +14,7 @@ import {
 } from '../journey/progressionEngine.js'
 import { JOB_LISTINGS, logoKey } from '../utils/jobsData.js'
 import { JobDetailModal } from '../components/modals/JobDetailModal.jsx'
+import { formatSalaryLabelIndian } from '../utils/formatINR.js'
 
 const PATHS = [
   { key: 'all', label: 'All Paths', chip: 'on' },
@@ -500,7 +501,7 @@ export function Frame3() {
                         </div>
                         <div className="mb-[6px] text-[9px] leading-[1.45] text-[rgba(250,249,244,.42)]">{n.brief}</div>
                         <div className="text-[10px] font-[800]" style={{ color: isActive ? PCOL[pk] : '#888' }}>
-                          {n.sal}
+                          {formatSalaryLabelIndian(n.sal)}
                         </div>
                       </div>
                     </button>
@@ -544,7 +545,7 @@ export function Frame3() {
                   Year {selectedDetail.node.yr}
                 </div>
                 <div className="mb-2 text-[20px] font-[900]" style={{ color: selectedDetail.col }}>
-                  {selectedDetail.node.sal}
+                  {formatSalaryLabelIndian(selectedDetail.node.sal)}
                 </div>
                 <div className="text-[10px] italic leading-[1.5] text-[rgba(250,249,244,.4)]">
                   {selectedDetail.node.detail.lifestyle}
@@ -622,7 +623,7 @@ export function Frame3() {
                         <div className="flex flex-wrap gap-[9px] text-[9.5px] text-[rgba(250,249,244,.4)]">
                           <span>📍 {j.loc}</span>
                           <span>{j.mode}</span>
-                          <span className="font-[700] text-[#48DB85]">{j.sal}</span>
+                          <span className="font-[700] text-[#48DB85]">{formatSalaryLabelIndian(j.sal)}</span>
                           {j.posted ? <span>{j.posted}</span> : null}
                         </div>
                       </button>

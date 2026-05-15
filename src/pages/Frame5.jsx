@@ -11,9 +11,9 @@ import {
   buildFallbackRoiModel,
   chartYearTicks,
   cumulativeExtraLacs,
-  fetchRoiWithOpenAI,
   fmtRupeeMoK,
 } from '../utils/roiOpenAI.js'
+import { formatBudgetLacs } from '../utils/formatINR.js'
 
 const PATH_TABS = [
   { key: 'accel', label: 'Accelerated', emoji: '🚀', hint: 'Fastest promotion cadence' },
@@ -25,9 +25,7 @@ const BRAND_PURPLE = '#6320EE'
 
 function fmtLacs(n) {
   if (n == null || Number.isNaN(n)) return '—'
-  const x = Number(n)
-  if (x >= 100) return `₹${Math.round(x)}L`
-  return `₹${x.toFixed(x % 1 === 0 ? 0 : 1)}L`
+  return formatBudgetLacs(n)
 }
 
 export function Frame5() {
@@ -65,14 +63,7 @@ export function Frame5() {
     let cancelled = false
     async function load() {
       setRoiLoading(true)
-      const ai = await fetchRoiWithOpenAI({
-        targetRole: roleTitleForRoi,
-        industryLabel,
-        card: roleCard,
-        salaryLpa,
-        eduBudgetLacs,
-      })
-      const next = ai || buildFallbackRoiModel({ salaryLpa, eduBudgetLacs })
+      const next = buildFallbackRoiModel({ salaryLpa, eduBudgetLacs })
       if (!cancelled) {
         setRoiModel(next)
         setRoiLoading(false)

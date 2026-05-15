@@ -7,15 +7,11 @@ import { flattenIndustryRoles, INDUSTRIES } from '../utils/fasttrackData.js'
 import { PD } from '../utils/pathData.js'
 import {
   buildFallbackGaps,
-  fetchGapAnalysisWithOpenAI,
   getStaticGapsForRole,
 } from '../utils/gapAnalysisOpenAI.js'
+import { formatCountIN, formatRupee, formatRupeeMonthly } from '../utils/formatINR.js'
 
-const PATH_PILLS = [
-  { key: 'accel', label: 'Accelerated', emoji: '⚡', hint: 'Fastest promotion cadence' },
-  { key: 'fast', label: 'Fast Track', emoji: '🚀', hint: 'Balanced speed & safety' },
-  { key: 'trad', label: 'Traditional', emoji: '📈', hint: 'Steady, proven ladder' },
-]
+const GAP_PATH = 'accel'
 
 const CAT_META = {
   edu: { title: 'Education', icon: '📚', iconBg: 'bg-[rgba(184,48,0,.08)]' },
@@ -68,22 +64,12 @@ function giBoxUi(pill) {
   return 'border-[rgba(55,1,123,.4)] bg-[rgba(55,1,123,.07)]'
 }
 
-function countPills(gaps, pillId) {
-  let n = 0
-  GAP_CATS.forEach((k) => {
-    gaps[k]?.items?.forEach((it) => {
-      if (it.pill === pillId) n += 1
-    })
-  })
-  return n
-}
-
 /** Collapsible investment options — inside Education accordion (HTML inv-blk) */
 function InvestmentBlock({ investCalc, salaryMonthly, dMode, collapsed, onToggleHead }) {
   const { ftLump, ftMonthly, wsMonthly, wsTotal } = investCalc
   const breakNote =
     dMode === 'break'
-      ? `~₹${Math.round((salaryMonthly * 24) / 1000).toLocaleString('en-IN')}k in earnings`
+      ? `~${formatRupee(salaryMonthly * 24)} in earnings`
       : 'salary continuity'
 
   const optBFeatures = [
@@ -124,10 +110,10 @@ function InvestmentBlock({ investCalc, salaryMonthly, dMode, collapsed, onToggle
           <div className="mb-[7px] text-[13px] font-[800]">Full-time Degree</div>
           <div className="mb-[8px] flex items-baseline gap-[5px]">
             <span className="font-['DM_Serif_Display',serif] text-[22px] leading-none text-[#37017B]">
-              ₹{Math.round(ftLump / 1000)}k
+              {formatRupee(ftLump)}
             </span>
             <span className="text-[11px] text-[#555]">
-              total · or ₹{ftMonthly.toLocaleString('en-IN')}/mo EMI
+              total · or {formatRupeeMonthly(ftMonthly)} EMI
             </span>
           </div>
           {['2-year full-time programme', 'Campus placements + alumni network', 'Faster completion (24 months)'].map(
@@ -154,10 +140,10 @@ function InvestmentBlock({ investCalc, salaryMonthly, dMode, collapsed, onToggle
           <div className="mb-[7px] text-[13px] font-[800]">Work + Study Degree</div>
           <div className="mb-[8px] flex items-baseline gap-[5px]">
             <span className="font-['DM_Serif_Display',serif] text-[22px] leading-none text-[#37017B]">
-              ₹{wsMonthly.toLocaleString('en-IN')}
+              {formatRupeeMonthly(wsMonthly).replace('/mo', '')}
             </span>
             <span className="text-[11px] text-[#555]">
-              /month{wsTotal > 0 ? ` · ~₹${Math.round(wsTotal / 1000).toLocaleString('en-IN')}k total` : ''}
+              /month{wsTotal > 0 ? ` · ~${formatRupee(wsTotal)} total` : ''}
             </span>
           </div>
           {optBFeatures.map((f) => (
@@ -194,7 +180,7 @@ function BudgetBlock({ salaryMonthly, monthlyBudget, onBudgetChange, editing, on
           type="text"
           inputMode="numeric"
           readOnly={!editing}
-          value={monthlyBudget.toLocaleString('en-IN')}
+          value={formatCountIN(monthlyBudget)}
           onChange={(e) => {
             const n = Number(String(e.target.value).replace(/[^\d]/g, ''))
             if (Number.isFinite(n)) onBudgetChange(n)
@@ -207,7 +193,7 @@ function BudgetBlock({ salaryMonthly, monthlyBudget, onBudgetChange, editing, on
         <span className="text-[12px] font-[700] text-[#888]">/month</span>
       </div>
       <p className="text-[10.5px] leading-[1.5] text-[#666]">
-        Based on ₹{salaryMonthly.toLocaleString('en-IN')}/mo salary · 18% of income · fits a BBA/MBA EMI comfortably
+        Based on {formatRupeeMonthly(salaryMonthly)} salary · 18% of income · fits a BBA/MBA EMI comfortably
       </p>
     </div>
   )
@@ -380,13 +366,11 @@ export function Frame4() {
     s,
     selIndustry,
     selRole,
-    gapPath,
     setGapPath,
     setRPath,
     setEduBudgetLacs,
   } = useAppState()
 
-  const [pathOpen, setPathOpen] = useState(false)
   const [itemAssess, setItemAssess] = useState({})
   const [openSections, setOpenSections] = useState(() => ({
     edu: true,
@@ -418,6 +402,11 @@ export function Frame4() {
   const roleTitleForGaps = (selRole || '').trim() || pdKey
 
   useEffect(() => {
+    setGapPath(GAP_PATH)
+    setRPath(GAP_PATH)
+  }, [setGapPath, setRPath])
+
+  useEffect(() => {
     let cancelled = false
     const title = roleTitleForGaps
 
@@ -432,12 +421,7 @@ export function Frame4() {
         return
       }
 
-      const ai = await fetchGapAnalysisWithOpenAI({
-        targetRole: title,
-        industryLabel,
-        card: roleCard,
-      })
-      const next = ai || buildFallbackGaps(title, roleCard)
+      const next = buildFallbackGaps(title, roleCard)
       if (!cancelled) {
         setGaps(next)
         setGapsLoading(false)
@@ -481,25 +465,9 @@ export function Frame4() {
   }
   const monthlyBudget = budgetOverride ?? suggestedMonthly
 
-  const stats = useMemo(() => {
-    if (!gaps) return { crit: 0, miss: 0, need: 0 }
-    return {
-      crit: countPills(gaps, 'crit'),
-      miss: countPills(gaps, 'miss'),
-      need: countPills(gaps, 'need'),
-    }
-  }, [gaps])
-
-  const pathNodes = pd.nodes?.[gapPath] || []
-
   const handleItemAssess = useCallback((catKey, itemIdx, value) => {
     setItemAssess((prev) => ({ ...prev, [`${catKey}-${itemIdx}`]: value }))
   }, [])
-
-  const pickPath = (k) => {
-    setGapPath(k)
-    setRPath(k)
-  }
 
   const toggleSection = (key) => {
     setOpenSections((p) => ({ ...p, [key]: !p[key] }))
@@ -508,11 +476,12 @@ export function Frame4() {
   const goNext = () => {
     const lacs = Math.round(((monthlyBudget * 12) / 100000) * 10) / 10
     setEduBudgetLacs(lacs > 0 ? lacs : 0)
-    setRPath(gapPath)
+    setRPath(GAP_PATH)
     nav('/5')
   }
 
-  const profilesN = roleCard?.dbProfiles?.toLocaleString('en-IN') ?? '2,127'
+  const profilesN = roleCard?.dbProfiles != null ? formatCountIN(roleCard.dbProfiles) : '2,127'
+  const accelYrs = pd[GAP_PATH]?.yrs ?? pd.accel?.yrs
   const socialPct = 87
 
   return (
@@ -524,69 +493,16 @@ export function Frame4() {
           <span className="text-[#ccc]">Destination · {destinationTitle}</span>
         </div>
 
-        <div className="mb-1 flex flex-wrap items-end justify-between gap-3">
-          <div className="text-[27px] leading-[1.2] [font-family:'DM Serif Display',serif]">
-            What&apos;s missing from your profile
-          </div>
-          <button
-            type="button"
-            className="rounded-[10px] border border-[rgba(55,1,123,.2)] bg-white px-[14px] py-[8px] text-[12px] font-[700] text-[#37017B] shadow-sm transition hover:bg-[rgba(55,1,123,.06)]"
-            onClick={() => setPathOpen(true)}
-          >
-            View my path →
-          </button>
+        <div className="mb-1 text-[27px] leading-[1.2] [font-family:'DM Serif Display',serif]">
+          What&apos;s missing from your profile
         </div>
-        <p className="mb-6 max-w-[720px] text-[13px] leading-[1.55] text-[#555]">
+        <p className="mb-2 max-w-[720px] text-[13px] leading-[1.55] text-[#555]">
           Based on live JD analysis and profiles similar to yours on Apna. Gaps are grouped so you can prioritise — critical
           items block shortlisting; missing items hurt interviews; needed items strengthen your case.
         </p>
-
-        {/* Summary card with path selector */}
-        <div
-          className={[
-            'mb-4 overflow-hidden rounded-[16px] border border-[rgba(255,255,255,.08)] bg-[#0C0C0C] px-[20px] py-[20px] text-[#FAF9F4] shadow-[0_12px_40px_rgba(0,0,0,.18)]',
-            gapsLoading ? 'animate-pulse opacity-90' : '',
-          ].join(' ')}
-        >
-          <div className="mb-4 text-[20px] font-[800] leading-tight [font-family:'DM Serif Display',serif]">
-            What&apos;s missing — {destinationTitle}
-          </div>
-          <div className="mb-5 flex flex-wrap gap-2">
-            {PATH_PILLS.map((p) => (
-              <button
-                key={p.key}
-                type="button"
-                title={p.hint}
-                className={[
-                  'rounded-[50px] border-[1.5px] px-[16px] py-[9px] text-[12px] font-[700] transition-all duration-200',
-                  gapPath === p.key
-                    ? 'border-[#a855f7] bg-[#a855f7] text-white shadow-[0_4px_14px_rgba(168,85,247,.35)]'
-                    : 'border-[rgba(255,255,255,.2)] bg-[rgba(255,255,255,.06)] text-[rgba(250,249,244,.75)] hover:border-[rgba(168,85,247,.5)]',
-                ].join(' ')}
-                onClick={() => pickPath(p.key)}
-              >
-                <span className="mr-1">{p.emoji}</span>
-                {p.label}
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { k: 'crit', label: 'Critical', sub: 'resume screen', v: stats.crit, border: 'border-[rgba(239,68,68,.35)]' },
-              { k: 'miss', label: 'Missing', sub: 'interviews', v: stats.miss, border: 'border-[rgba(245,158,11,.35)]' },
-              { k: 'need', label: 'Needed', sub: 'offer strength', v: stats.need, border: 'border-[rgba(59,130,246,.35)]' },
-            ].map((row) => (
-              <div
-                key={row.k}
-                className={['rounded-[13px] border bg-[rgba(255,255,255,.06)] p-[14px] backdrop-blur-sm', row.border].join(' ')}
-              >
-                <div className="text-[10px] font-[800] uppercase tracking-[.08em] text-[rgba(250,249,244,.45)]">{row.label}</div>
-                <div className="mt-1 text-[28px] font-[800] leading-none text-white">{gapsLoading ? '—' : row.v}</div>
-                <div className="mt-1 text-[11px] text-[rgba(250,249,244,.4)]">{row.sub}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <p className="mb-6 text-[12px] font-[700] text-[#37017B]">
+          ⚡ Accelerated path · ~{accelYrs ?? '—'} year target for {destinationTitle}
+        </p>
 
         {/* Social proof */}
         <div className="mb-6 rounded-[12px] border border-[rgba(72,219,133,.35)] bg-[rgba(72,219,133,.12)] px-[16px] py-[12px] text-[12.5px] font-[600] leading-[1.5] text-[#14532d]">
@@ -633,14 +549,15 @@ export function Frame4() {
 
         <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-[rgba(0,0,0,.06)] pt-6">
           <p className="max-w-[420px] text-[12px] text-[#888]">
-            Path horizon for{' '}
-            <strong className="text-[#0C0C0C]">{PATH_PILLS.find((p) => p.key === gapPath)?.label}</strong>: ~
-            {pd[gapPath]?.yrs ?? '—'} yrs to{' '}
-            <strong className="text-[#0C0C0C]">{destinationTitle}</strong> · saves{' '}
-            <strong className="text-[#15803d]">
-              {pd.trad.yrs - (pd[gapPath]?.yrs ?? pd.trad.yrs)} yrs
-            </strong>{' '}
-            vs traditional
+            Accelerated path: ~{accelYrs ?? '—'} yrs to{' '}
+            <strong className="text-[#0C0C0C]">{destinationTitle}</strong>
+            {pd.trad?.yrs && accelYrs ? (
+              <>
+                {' '}
+                · saves{' '}
+                <strong className="text-[#15803d]">{pd.trad.yrs - accelYrs} yrs</strong> vs traditional
+              </>
+            ) : null}
           </p>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => nav('/3')}>
@@ -651,56 +568,6 @@ export function Frame4() {
         </div>
       </div>
 
-      {/* My Path modal */}
-      {pathOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45 p-4 sm:items-center">
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="max-h-[85vh] w-full max-w-[520px] overflow-y-auto rounded-[16px] border border-[rgba(0,0,0,.08)] bg-[#FAF9F4] p-[20px] shadow-2xl"
-          >
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <div className="text-[18px] font-[800] [font-family:'DM Serif Display',serif]">
-                  Your path · {destinationTitle}
-                </div>
-                <div className="mt-1 text-[12px] text-[#666]">
-                  {pd[gapPath]?.label ?? ''} · ~{pd[gapPath]?.yrs} years (illustrative ladder for your function)
-                </div>
-              </div>
-              <button
-                type="button"
-                className="rounded-[8px] border border-[rgba(0,0,0,.1)] px-[12px] py-[6px] text-[12px] font-[700]"
-                onClick={() => setPathOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-            <ol className="space-y-3">
-              {pathNodes.map((n, i) => (
-                <li
-                  key={`${n.r}-${n.yr}`}
-                  className={[
-                    'rounded-[11px] border px-[12px] py-[10px]',
-                    n.goal
-                      ? 'border-[rgba(72,219,133,.45)] bg-[rgba(72,219,133,.08)]'
-                      : 'border-[rgba(0,0,0,.06)] bg-white',
-                  ].join(' ')}
-                >
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="text-[13px] font-[800]">
-                      {i + 1}. {n.r}
-                    </span>
-                    <span className="text-[11px] font-[700] text-[#37017B]">Year ~{n.yr}</span>
-                  </div>
-                  <div className="mt-1 text-[11.5px] text-[#555]">{n.brief}</div>
-                  <div className="mt-1 text-[11px] font-[700] text-[#888]">{n.sal}</div>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </div>
-      ) : null}
     </section>
   )
 }

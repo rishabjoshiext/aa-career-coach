@@ -7,9 +7,9 @@ import { resolvePdRole } from '../utils/roleKey.js'
 import { flattenIndustryRoles, INDUSTRIES } from '../utils/fasttrackData.js'
 import {
   buildFallbackOnlineCollegePicks,
-  fetchOnlineCollegePicksWithOpenAI,
 } from '../utils/onlinePartnerUniversities.js'
-import { buildFallbackSpec, fetchSpecialisationWithOpenAI } from '../utils/specialisationData.js'
+import { buildFallbackSpec } from '../utils/specialisationData.js'
+import { formatLPA, formatRupeeMonthly, formatSalaryLabelIndian } from '../utils/formatINR.js'
 
 const PATH_LABELS = [
   { key: 'trad', label: 'Traditional' },
@@ -24,19 +24,13 @@ function formatSalaryFromProfile(s) {
   const raw = String(s.salary || '').replace(/,/g, '').trim()
   const n = Number(raw.replace(/[^\d.]/g, ''))
   if (!Number.isFinite(n) || n <= 0) return '—'
-  if (n < 100) {
-    const k = Math.round((n * 100000) / 12 / 1000)
-    return `~₹${k}k/mo (from LPA)`
-  }
-  const k = Math.round(n / 1000)
-  return `~₹${k}k/mo`
+  if (n < 100) return `~${formatRupeeMonthly(Math.round((n * 100000) / 12))} (from ${formatLPA(n)})`
+  return `~${formatRupeeMonthly(n)}`
 }
 
 function targetSalaryLabel(card) {
   if (!card?.sal) return '—'
-  const sal = String(card.sal).trim()
-  if (sal.toLowerCase().includes('mo')) return sal
-  return `${sal}/mo (typical band)`
+  return formatSalaryLabelIndian(card.sal)
 }
 
 function profileEducationLine(s) {
@@ -98,13 +92,7 @@ export function Frame7() {
     let cancelled = false
     async function load() {
       setLoading(true)
-      const ai = await fetchSpecialisationWithOpenAI({
-        destinationTitle: roleTitle,
-        industryLabel,
-        card: roleCard,
-        profile: specProfileSnap,
-      })
-      const next = ai || buildFallbackSpec(destinationTitle, roleCard, specProfileSnap)
+      const next = buildFallbackSpec(destinationTitle, roleCard, specProfileSnap)
       if (!cancelled) {
         setSpec(next)
         setLoading(false)
@@ -121,13 +109,7 @@ export function Frame7() {
     let cancelled = false
     async function loadColleges() {
       setCollegesLoading(true)
-      const ai = await fetchOnlineCollegePicksWithOpenAI({
-        destinationTitle,
-        industryLabel,
-        card: roleCard,
-        programmeTitle: spec.title,
-      })
-      const picks = ai && ai.length > 0 ? ai : buildFallbackOnlineCollegePicks(destinationTitle, spec.title)
+      const picks = buildFallbackOnlineCollegePicks(destinationTitle, spec.title)
       if (!cancelled) {
         setCollegePicks(picks.slice(0, 5))
         setCollegesLoading(false)

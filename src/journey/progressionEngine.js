@@ -6,6 +6,7 @@
 import { selectBestLadder, findDestinationMeta, normalizeRole, roleSimilarity } from './roleMatcher.js'
 import { extractRoleStem, buildStemLadder } from './roleLadders.js'
 import { filterRolesForHierarchy, inferSeniorityRank } from './seniority.js'
+import { formatRupeeMonthlyBand } from '../utils/formatINR.js'
 
 /** Future milestone cards on canvas (NOW circle is separate). */
 export const PATH_MILESTONE_COUNTS = {
@@ -91,9 +92,7 @@ function yearsForPath(count, totalYears, pathKey) {
  * @param {number} t 0–1
  */
 function formatSalaryBandValues(lo, hi) {
-  const k1 = Math.round(Math.min(lo, hi) / 1000)
-  const k2 = Math.round(Math.max(lo, hi) / 1000)
-  return `₹${k1}–${k2}k/mo`
+  return formatRupeeMonthlyBand(lo, hi)
 }
 
 /** @param {object} [profile] */
@@ -388,8 +387,8 @@ export function generateCareerProgression(input) {
   const salaryText =
     input.salaryText ||
     (salMeta?.min_monthly && salMeta?.max_monthly
-      ? `₹${Math.round(salMeta.min_monthly / 1000)}–${Math.round(salMeta.max_monthly / 1000)}k`
-      : '₹35–85k')
+      ? formatRupeeMonthlyBand(salMeta.min_monthly, salMeta.max_monthly)
+      : formatRupeeMonthlyBand(35000, 85000))
 
   const { min, max } = parseSalaryBand(salaryText)
 

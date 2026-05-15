@@ -22,10 +22,10 @@ import {
 } from '../data/roleDestinationPacks.js'
 import { AlignmentPanel } from '../components/frame2/AlignmentPanel.jsx'
 import { DestinationCardsCarousel } from '../components/frame2/DestinationCardsCarousel.jsx'
+import { formatCountIN, formatSalaryLabelIndian } from '../utils/formatINR.js'
 
 function fmtIN(n) {
-  if (typeof n === 'number') return n.toLocaleString('en-IN')
-  return String(n || '')
+  return formatCountIN(n)
 }
 
 export function Frame2() {
@@ -179,7 +179,7 @@ export function Frame2() {
     if (selectedCard._isSafetyNet) {
       return [
         `${selectedCard.role} — a stable, predictable role in ${selectedCard.industry}`,
-        `Starting salary band ${selectedCard.sal}/mo · steady incremental growth`,
+        `Starting salary band ${formatSalaryLabelIndian(selectedCard.sal)} · steady incremental growth`,
         `${selectedCard.jobs} active openings · ${selectedCard.apnaJobs} on Apna right now`,
         'Lower entry barrier · works as fallback or warm-up path',
         'Predictable career arc — no high-stakes pivots needed',
@@ -187,7 +187,7 @@ export function Frame2() {
     }
     return [
       `${selectedCard.role} role at a respected company in ${selectedCard.industry}`,
-      `Salary to ${selectedCard.sal}/mo by Year ${selectedCard.accelYrs} on accelerated path`,
+      `Salary to ${formatSalaryLabelIndian(selectedCard.sal)} by Year ${selectedCard.accelYrs} on accelerated path`,
       `${selectedCard.jobs} active job openings in India · ${selectedCard.apnaJobs} on Apna alone`,
       `${fmtIN(selectedCard.dbProfiles)} people walked this same path`,
       `${selectedCard.growth} 5-year demand growth — supply shortage is real`,
@@ -404,7 +404,7 @@ export function Frame2() {
                 <div className="mb-[3px] text-[10px] font-[700] uppercase tracking-[.07em] text-[#bbb]">
                   Target Salary (Year {d.accelYrs})
                 </div>
-                <div className="text-[19px] font-[800]">{d.sal}/mo</div>
+                <div className="text-[19px] font-[800]">{formatSalaryLabelIndian(d.sal)}</div>
                 <div className="mt-[2px] text-[11px] font-[600] text-[#37017B]">
                   ↑ {d.growth} 5-yr demand growth · {d.jobs} open in India
                 </div>
@@ -519,7 +519,7 @@ export function Frame2() {
                   <div className="flex items-end justify-between border-t border-[rgba(34,197,94,.1)] pt-[9px]">
                     <div>
                       <div className="text-[9px] font-[700] uppercase tracking-[.06em] text-[#aaa]">Starting salary</div>
-                      <div className="text-[14px] font-[800] text-[#0C0C0C]">{sr.sal}/mo</div>
+                      <div className="text-[14px] font-[800] text-[#0C0C0C]">{formatSalaryLabelIndian(sr.sal)}</div>
                     </div>
                     <div className="text-[10px] font-[700] text-[#22c55e]">{sr.apnaJobs} on Apna</div>
                   </div>

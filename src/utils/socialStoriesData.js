@@ -1,10 +1,4 @@
-/** Social proof + “people like you” stories for Frame 6 — conservative numbers from catalog + OpenAI copy. */
-
-function stripJsonFence(text) {
-  const t = String(text || '').trim()
-  const m = t.match(/^```(?:json)?\s*([\s\S]*?)```$/i)
-  return m ? m[1].trim() : t
-}
+/** Social proof + “people like you” stories for Frame 6 — conservative, deterministic copy. */
 
 function hashStr(s) {
   let h = 0
@@ -28,43 +22,6 @@ export function conservativePlacedPct(destinationTitle) {
 export function liveReviewersCount(card, destinationTitle) {
   const base = card?.dbProfiles ? Math.min(420, Math.round(card.dbProfiles * 0.08)) : 160
   return Math.max(120, base + (hashStr(destinationTitle) % 90))
-}
-
-export function isValidStoriesPayload(o) {
-  if (!o || typeof o !== 'object' || !Array.isArray(o.stories)) return false
-  if (o.stories.length < 4 || o.stories.length > 12) return false
-  return o.stories.every((s) => {
-    if (!s || typeof s !== 'object') return false
-    const i = String(s.i || '').trim()
-    const n = String(s.n || '').trim()
-    const c = String(s.c || '').trim()
-    const f = String(s.from ?? s.f ?? '').trim()
-    const t = String(s.to ?? s.t ?? '').trim()
-    const h = String(s.h ?? '').trim()
-    const ti = String(s.ti ?? '').trim()
-    const q = String(s.q ?? '').trim()
-    return i.length === 1 && n && c && f && t && h && ti && q
-  })
-}
-
-export function normalizeStoriesPayload(raw) {
-  try {
-    const o = typeof raw === 'string' ? JSON.parse(stripJsonFence(raw)) : raw
-    if (!isValidStoriesPayload(o)) return null
-    return o.stories.map((s) => ({
-      i: String(s.i || s.n?.[0] || '?').slice(0, 1).toUpperCase(),
-      n: String(s.n).trim(),
-      c: String(s.c).trim(),
-      f: String(s.from ?? s.f).trim(),
-      t: String(s.to ?? s.t).trim(),
-      h: String(s.h).trim(),
-      ti: String(s.ti).trim(),
-      q: String(s.q).trim().replace(/^["']|["']$/g, ''),
-      ph: Boolean(s.ph),
-    }))
-  } catch {
-    return null
-  }
 }
 
 const FALLBACK_FIRST = [
@@ -127,59 +84,4 @@ export function buildFallbackStories(destinationTitle) {
     q: quotes[idx],
     ph: idx % 3 !== 2,
   }))
-}
-
-export async function fetchStoriesWithOpenAI({ destinationTitle, industryLabel, card }) {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY
-  if (!apiKey) return null
-
-  const dest = String(destinationTitle || '').trim() || 'Target role'
-  const ind = industryLabel || 'General'
-  const desc = card?.desc ? String(card.desc) : ''
-  const jobs = card?.jobs ? String(card.jobs) : ''
-  const sal = card?.sal ? String(card.sal) : ''
-
-  const prompt = `Return ONLY valid JSON (no markdown). Indian career app — realistic, non-exaggerated peer stories.
-
-Destination role: ${dest}
-Industry / function: ${ind}
-Role description: ${desc}
-Typical salary band: ${sal}
-Open roles (catalog): ${jobs}
-
-Return: { "stories": array of exactly 8 objects with keys:
-  "i": one uppercase letter avatar initial,
-  "n": full Indian name (realistic, varied),
-  "c": city, state (e.g. "Lucknow, UP"),
-  "from": prior job title (junior, plausible for India, NOT always finance unless industry is Finance),
-  "to": must be exactly "${dest}" or a clear variant (e.g. "${dest} — Brand side"),
-  "h": salary hike like "+42%" — keep between +28% and +58%,
-  "ti": time span like "3.5 yrs",
-  "q": one short quote 18–28 words, credible, no miracle claims,
-  "ph": boolean — roughly half true for photo-style avatar
-}
-
-Rules: diverse cities; no celebrity names; no fake company trademarks beyond generic (e.g. "large NBFC", "MNC"); stories must fit ${dest}.`
-
-  try {
-    const resp = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4.1-mini',
-        input: prompt,
-        temperature: 0.35,
-      }),
-    })
-    if (!resp.ok) return null
-    const data = await resp.json()
-    const text = data?.output_text || ''
-    if (!text) return null
-    return normalizeStoriesPayload(text)
-  } catch {
-    return null
-  }
 }
