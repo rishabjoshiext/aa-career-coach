@@ -1,15 +1,7 @@
-import { useEffect } from 'react'
+import { useLayoutEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell.jsx'
 import { useAppState } from './hooks/appState.jsx'
-
-function ScrollToTop() {
-  const { pathname } = useLocation()
-  useEffect(() => {
-    document.querySelectorAll('[data-scroll-top]').forEach((el) => el.scrollTo({ top: 0 }))
-  }, [pathname])
-  return null
-}
 import { Frame1 } from './pages/Frame1.jsx'
 import { Frame2 } from './pages/Frame2.jsx'
 import { Frame3 } from './pages/Frame3.jsx'
@@ -18,6 +10,19 @@ import { Frame5 } from './pages/Frame5.jsx'
 import { Frame6 } from './pages/Frame6.jsx'
 import { Frame7 } from './pages/Frame7.jsx'
 import { Frame8 } from './pages/Frame8.jsx'
+
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0)
+    document.documentElement.scrollTop = 0
+    document.body.scrollTop = 0
+    document.querySelectorAll('[data-app-page-scroll]').forEach((el) => {
+      el.scrollTop = 0
+    })
+  }, [pathname])
+  return null
+}
 
 function RoutedApp() {
   const { sessionEpoch } = useAppState()

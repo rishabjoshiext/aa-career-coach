@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button.jsx'
 import { useAppState } from '../hooks/appState.jsx'
+import { EDU_MAX_PILLS } from '../data/frame1Education.js'
 import { resolvePdRole } from '../utils/roleKey.js'
 import { flattenIndustryRoles, INDUSTRIES } from '../utils/fasttrackData.js'
 import {
@@ -40,9 +41,12 @@ function targetSalaryLabel(card) {
 
 function profileEducationLine(s) {
   const bits = []
-  if (s.edu === '12') bits.push('Class 12 pathway')
+  const pill = EDU_MAX_PILLS.find((p) => p.id === s.eduMax)
+  if (pill) bits.push(pill.label)
+  else if (s.edu === '12') bits.push('Class 12 pathway')
   else if (s.edu === 'UG') bits.push('Undergraduate')
   else if (s.edu === 'PG') bits.push('Postgraduate')
+  if (s.degreeEdu) bits.push(s.degreeEdu)
   if (s.spec) bits.push(s.spec)
   if (s.uni) bits.push(s.uni)
   if (s.year) bits.push(`’${String(s.year).slice(-2)}`)
@@ -147,7 +151,7 @@ export function Frame7() {
   const anchorDisplay = collegePicks[0] || spec?.anchorUni || '—'
 
   return (
-    <section data-scroll-top className="absolute inset-0 overflow-y-auto px-9 pb-10 pt-7">
+    <section className="absolute inset-0 overflow-y-auto px-9 pb-10 pt-7" data-app-page-scroll>
       <div className="mx-auto max-w-[880px]">
         <div className="mb-[14px] flex flex-wrap items-center gap-[6px] text-[11px] font-[600] text-[#bbb]">
           <span className="rounded-[20px] bg-[rgba(55,1,123,.07)] px-[10px] py-[3px] text-[#37017B]">7 · Specialisation</span>

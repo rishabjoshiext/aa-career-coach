@@ -62,7 +62,11 @@ export function resolveJourneySourceCard({ selRole, selIndustry, profile }) {
 
   const inferred =
     inferIndustryFromFreeText(title) ||
-    inferIndustryFromProfileStrings(profile?.ind, profile?.role) ||
+    inferIndustryFromProfileStrings(
+      profile?.ind,
+      profile?.role,
+      Array.isArray(profile?.selectedSkills) ? profile.selectedSkills.join(' ') : '',
+    ) ||
     (/\bproduct\b/i.test(title) ? 'Product' : null)
 
   if (bestSc >= 0.26 && best) {

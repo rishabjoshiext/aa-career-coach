@@ -1,5 +1,6 @@
 import { cn } from '../utils/cn.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { EDU_BRANCH_SCHOOL_ONLY, EDU_MAX_PILLS, labelForEduProgramMode } from '../data/frame1Education.js'
 
 function fmtINR(num) {
   const n = Number(num)
@@ -12,22 +13,59 @@ const IDLE_LIVE_FEED_LABELS = ['Profiles scanning…', 'Same education path', 'O
 export function LiveProfileCard({ s, progressPct }) {
   const name = s.name?.trim() || 'Your Name'
   const av = s.name?.trim()?.[0]?.toUpperCase() || '?'
-  const eduLabel = s.edu === '12' ? '12th / Diploma' : s.edu === 'UG' ? 'Graduate (UG)' : 'Post Graduate'
+  const eduLabel = useMemo(() => {
+    const pill = EDU_MAX_PILLS.find((p) => p.id === s.eduMax)
+    if (pill) return pill.label
+    if (s.edu === '12') return 'School / Diploma'
+    if (s.edu === 'UG') return 'Graduate (UG)'
+    if (s.edu === 'PG') return 'Post Graduate'
+    return 'Education'
+  }, [s.eduMax, s.edu])
   const salaryLabel = s.salary ? `₹${fmtINR(s.salary)}` : '—'
+
+  const experienceLine = useMemo(() => {
+    if (!s.exp || s.exp === '') return '—'
+    if (s.exp === 'fresher') return 'Fresher'
+    const y = parseInt(String(s.totalExpYears), 10)
+    const m = s.totalExpMonths === '' || s.totalExpMonths == null ? 0 : parseInt(String(s.totalExpMonths), 10)
+    if (Number.isFinite(y) && y >= 0 && Number.isFinite(m) && m >= 0 && m <= 11 && (y > 0 || m > 0)) {
+      const parts = []
+      if (y > 0) parts.push(`${y} yr${y === 1 ? '' : 's'}`)
+      if (m > 0) parts.push(`${m} mo`)
+      if (parts.length) return parts.join(' ')
+    }
+    if (s.exp && s.exp !== 'fresher') {
+      const band = { '0-1': '0–1 yr', '1-3': '1–3 yrs', '3-6': '3–6 yrs', '6+': '6+ yrs' }
+      return band[s.exp] ?? `${s.exp} yrs`
+    }
+    return '—'
+  }, [s.exp, s.totalExpYears, s.totalExpMonths])
 
   /** Live matching numbers stay at 0 until work experience or skills inputs exist (mirrors prototype intent). */
   const liveMatchUnlocked = useMemo(() => {
+    if (s.eduMax && (s.schoolMedium || s.uni)) return true
     const hasWorkEx =
-      s.exp !== 'fresher' ||
+      (Boolean(s.exp) && s.exp !== 'fresher') ||
       Boolean(String(s.yrsCur || '').trim()) ||
       (Boolean(String(s.role || '').trim()) && Boolean(String(s.company || '').trim()))
     const hasSkills =
+      (Array.isArray(s.selectedSkills) && s.selectedSkills.length > 0) ||
       Boolean(String(s.english || '').trim()) ||
-      Boolean(String(s.linkedinTier || '').trim()) ||
-      Boolean(String(s.projects || '').trim()) ||
-      Boolean(String(s.internships || '').trim())
+      Boolean(String(s.linkedinTier || '').trim())
     return hasWorkEx || hasSkills
-  }, [s.exp, s.yrsCur, s.role, s.company, s.english, s.linkedinTier, s.projects, s.internships])
+  }, [
+    s.eduMax,
+    s.schoolMedium,
+    s.uni,
+    s.exp,
+    s.yrsCur,
+    s.totalExpYears,
+    s.role,
+    s.company,
+    s.selectedSkills,
+    s.english,
+    s.linkedinTier,
+  ])
 
   const statusMsgs = [
     'Awaiting profile data…',
@@ -47,12 +85,10 @@ export function LiveProfileCard({ s, progressPct }) {
         name: s.name,
         phone: s.phone,
         email: s.email,
-        bd10: s.bd10,
-        sc10: s.sc10,
-        bd12: s.bd12,
-        sc12: s.sc12,
+        eduMax: s.eduMax,
+        schoolMedium: s.schoolMedium,
+        degreeEdu: s.degreeEdu,
         spec: s.spec,
-        scoreUG: s.scoreUG,
         uni: s.uni,
         year: s.year,
         role: s.role,
@@ -61,9 +97,11 @@ export function LiveProfileCard({ s, progressPct }) {
         func: s.func,
         ind: s.ind,
         english: s.english,
+        skillTags: Array.isArray(s.selectedSkills) && s.selectedSkills.length >= 2,
       }).filter(([, v]) => Boolean(v)).length
 
-    const expBonus = s.exp === 'fresher' ? 0 : s.exp === '0-1' ? 1 : s.exp === '1-3' ? 2 : s.exp === '3-6' ? 3 : 4
+    const expBonus =
+      !s.exp || s.exp === '' || s.exp === 'fresher' ? 0 : s.exp === '0-1' ? 1 : s.exp === '1-3' ? 2 : s.exp === '3-6' ? 3 : 4
     const total = filled + expBonus
 
     const profilesScanned = Math.max(10, Math.min(4830, Math.round(10 + total * 240 + (total > 5 ? total * 180 : 0))))
@@ -71,7 +109,7 @@ export function LiveProfileCard({ s, progressPct }) {
       2,
       Math.min(
         1840,
-        Math.round((s.spec ? 60 : 0) + (s.bd12 ? 40 : 0) + (s.bd10 ? 20 : 0) + (s.uni ? 80 : 0) + (s.scoreUG ? 30 : 0) + total * 55),
+        Math.round((s.spec ? 60 : 0) + (s.degreeEdu ? 30 : 0) + (s.uni ? 80 : 0) + (s.schoolMedium ? 20 : 0) + total * 55),
       ),
     )
     const jobsNearby = Math.max(
@@ -92,7 +130,7 @@ export function LiveProfileCard({ s, progressPct }) {
 
     if (s.uni) labels.push(`From ${s.uni.length > 18 ? `${s.uni.slice(0, 18)}…` : s.uni}`)
     else if (s.spec) labels.push(`${s.spec} match`)
-    else if (s.bd12) labels.push(`${s.bd12} board peers`)
+    else if (s.degreeEdu) labels.push(`${s.degreeEdu} pathway`)
     else labels.push('Same education path')
 
     if (s.ind && s.role) labels.push(`${s.role} jobs in ${s.ind.length > 14 ? `${s.ind.slice(0, 14)}…` : s.ind}`)
@@ -248,7 +286,11 @@ export function LiveProfileCard({ s, progressPct }) {
               {name}
             </div>
             <div className="mt-[3px] truncate text-[10.5px] text-[#888]">
-              {s.role && s.company ? `${s.role} @ ${s.company}` : s.role || 'Building profile…'}
+              {s.exp === 'fresher'
+                ? 'Fresher'
+                : s.role && s.company
+                  ? `${s.role} @ ${s.company}`
+                  : s.role || 'Building profile…'}
             </div>
           </div>
         </div>
@@ -260,10 +302,26 @@ export function LiveProfileCard({ s, progressPct }) {
           </div>
           <div className="flex flex-wrap items-baseline gap-[2px] text-[11.5px] font-[600] leading-[1.4] text-[#0C0C0C]">
             <span>{eduLabel}</span>
-            <span className="mx-[2px] font-[400] text-[#ccc]">·</span>
-            <span className={cn(!s.spec && 'text-[#aaa] font-[500]')}>{s.spec || 'specialisation'}</span>
-            <span className="mx-[2px] font-[400] text-[#ccc]">·</span>
-            <span className={cn(!s.year && 'text-[#aaa] font-[500]')}>{s.year || 'year'}</span>
+            {!EDU_BRANCH_SCHOOL_ONLY.has(s.eduMax) ? (
+              <>
+                {s.degreeEdu ? (
+                  <>
+                    <span className="mx-[2px] font-[400] text-[#ccc]">·</span>
+                    <span className="max-w-[140px] truncate">{s.degreeEdu}</span>
+                  </>
+                ) : null}
+                <span className="mx-[2px] font-[400] text-[#ccc]">·</span>
+                <span className={cn(!s.spec && 'text-[#aaa] font-[500]')}>{s.spec || 'specialisation'}</span>
+                <span className="mx-[2px] font-[400] text-[#ccc]">·</span>
+                <span className={cn(!s.year && 'text-[#aaa] font-[500]')}>{s.year || 'year'}</span>
+                {labelForEduProgramMode(s.eduStudyMode) ? (
+                  <>
+                    <span className="mx-[2px] font-[400] text-[#ccc]">·</span>
+                    <span className="text-[#555]">{labelForEduProgramMode(s.eduStudyMode)}</span>
+                  </>
+                ) : null}
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -273,13 +331,29 @@ export function LiveProfileCard({ s, progressPct }) {
             <span className="h-[1px] flex-1 bg-[repeating-linear-gradient(90deg,rgba(55,1,123,.15)_0_2px,transparent_2px_4px)]" />
           </div>
           <div className="flex flex-wrap items-baseline gap-[2px] text-[11.5px] font-[600] leading-[1.4] text-[#0C0C0C]">
-            <span>{s.role || '—'}</span>
-            <span className="mx-[2px] font-[400] text-[#ccc]">·</span>
-            <span className={cn(!s.func && 'text-[#aaa] font-[500]')}>{s.func || 'function'}</span>
-            <span className="mx-[2px] font-[400] text-[#ccc]">·</span>
-            <span className={cn(!s.ind && 'text-[#aaa] font-[500]')}>{s.ind || 'industry'}</span>
+            {s.exp === 'fresher' ? (
+              <span>Fresher</span>
+            ) : (
+              <>
+                <span>{s.role || '—'}</span>
+                <span className="mx-[2px] font-[400] text-[#ccc]">·</span>
+                <span className={cn(!s.func && 'text-[#aaa] font-[500]')}>{s.func || 'function'}</span>
+                <span className="mx-[2px] font-[400] text-[#ccc]">·</span>
+                <span className={cn(!s.ind && 'text-[#aaa] font-[500]')}>{s.ind || 'industry'}</span>
+              </>
+            )}
           </div>
         </div>
+
+        {Array.isArray(s.selectedSkills) && s.selectedSkills.length > 0 ? (
+          <div className="mb-2">
+            <div className="mb-[2px] flex items-center gap-[5px] text-[8.5px] font-[800] uppercase tracking-[.1em] text-[rgba(55,1,123,.5)]">
+              Skills
+              <span className="h-[1px] flex-1 bg-[repeating-linear-gradient(90deg,rgba(55,1,123,.15)_0_2px,transparent_2px_4px)]" />
+            </div>
+            <div className="text-[11.5px] font-[600] leading-[1.45] text-[#0C0C0C]">{s.selectedSkills.join(', ')}</div>
+          </div>
+        ) : null}
 
         <div className="my-[9px] grid grid-cols-2 gap-[7px]">
           <div className="rounded-[8px] border border-[rgba(55,1,123,.08)] bg-[rgba(55,1,123,.04)] px-[9px] py-[6px]">
@@ -287,7 +361,7 @@ export function LiveProfileCard({ s, progressPct }) {
               Experience
             </div>
             <div className="text-[13px] font-[800] leading-[1.1] tracking-[-.01em] text-[#0C0C0C]">
-              {s.exp === 'fresher' ? 'Fresher' : `${s.exp} yrs`}
+              {experienceLine}
             </div>
           </div>
           <div className="rounded-[8px] border border-[rgba(55,1,123,.08)] bg-[rgba(55,1,123,.04)] px-[9px] py-[6px]">

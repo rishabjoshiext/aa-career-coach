@@ -12,7 +12,7 @@ export function Frame8() {
   }
 
   return (
-    <section data-scroll-top className="absolute inset-0 overflow-y-auto bg-[#FAF9F4] px-6 py-10 text-[#0C0C0C]">
+    <section className="absolute inset-0 overflow-y-auto bg-[#FAF9F4] px-6 py-10 text-[#0C0C0C]" data-app-page-scroll>
       <div className="mx-auto flex min-h-full max-w-[560px] flex-col items-center justify-center text-center">
         <div
           className="mb-6 flex h-[88px] w-[88px] items-center justify-center rounded-full border-2 border-[rgba(55,1,123,.2)] bg-[rgba(55,1,123,.08)] text-[40px] shadow-[0_12px_40px_rgba(55,1,123,.12)]"

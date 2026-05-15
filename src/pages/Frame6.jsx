@@ -85,7 +85,7 @@ export function Frame6() {
   const headingEm = displayName || 'professionals like you'
 
   return (
-    <section data-scroll-top className="absolute inset-0 overflow-y-auto px-9 pb-10 pt-7">
+    <section className="absolute inset-0 overflow-y-auto px-9 pb-10 pt-7" data-app-page-scroll>
       <div className="mx-auto max-w-[1060px]">
         <div className="mb-[14px] flex flex-wrap items-center gap-[6px] text-[11px] font-[600] text-[#bbb]">
           <span className="rounded-[20px] bg-[rgba(55,1,123,.07)] px-[10px] py-[3px] text-[#37017B]">6 · Stories</span>

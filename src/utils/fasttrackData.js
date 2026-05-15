@@ -2194,6 +2194,19 @@ export const ROLE_TAGS = {
   Other: { chip: 'on', ico: '✨' },
 }
 
+/**
+ * Deep-clone a single catalogue card by industry + exact role title (Frame 2 curated packs).
+ * @param {string} industry
+ * @param {string} roleTitle
+ * @returns {Record<string, any> | null}
+ */
+export function cloneRoleCard(industry, roleTitle) {
+  const rows = INDUSTRY_ROLES[industry]
+  if (!rows) return null
+  const row = rows.find((r) => r.role === roleTitle)
+  return row ? { ...row, industry } : null
+}
+
 export function flattenIndustryRoles(selIndustry = 'all') {
   const cards = []
   if (selIndustry === 'all') {
