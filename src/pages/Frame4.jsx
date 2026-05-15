@@ -8,10 +8,16 @@ import { PD } from '../utils/pathData.js'
 import {
   buildFallbackGaps,
   getStaticGapsForRole,
-} from '../utils/gapAnalysisOpenAI.js'
+} from '../utils/gapAnalysis.js'
 import { formatCountIN, formatRupee, formatRupeeMonthly } from '../utils/formatINR.js'
 
 const GAP_PATH = 'accel'
+
+const PATH_LABELS = [
+  { key: 'accel', label: 'Accelerated' },
+  { key: 'fast', label: 'Fast Track' },
+  { key: 'trad', label: 'Traditional' },
+]
 
 const CAT_META = {
   edu: { title: 'Education', icon: '📚', iconBg: 'bg-[rgba(184,48,0,.08)]' },
@@ -366,6 +372,7 @@ export function Frame4() {
     s,
     selIndustry,
     selRole,
+    gapPath,
     setGapPath,
     setRPath,
     setEduBudgetLacs,
@@ -482,6 +489,8 @@ export function Frame4() {
 
   const profilesN = roleCard?.dbProfiles != null ? formatCountIN(roleCard.dbProfiles) : '2,127'
   const accelYrs = pd[GAP_PATH]?.yrs ?? pd.accel?.yrs
+  const pathLabel = PATH_LABELS.find((p) => p.key === gapPath)?.label ?? 'Accelerated'
+  const pathYearsToRole = pd[gapPath]?.yrs ?? pd.accel?.yrs ?? '—'
   const socialPct = 87
 
   return (
@@ -493,15 +502,36 @@ export function Frame4() {
           <span className="text-[#ccc]">Destination · {destinationTitle}</span>
         </div>
 
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-[14px] bg-[#0C0C0C] px-[18px] py-[14px] text-[#FAF9F4]">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="text-[20px] text-[#48DB85]" aria-hidden>
+              ⚡
+            </span>
+            <div className="min-w-0">
+              <div className="text-[10px] font-[800] uppercase tracking-[.12em] text-[rgba(250,249,244,.45)]">
+                Your selected goal
+              </div>
+              <div className="mt-[4px] text-[14px] font-[800] leading-snug">
+                {pathLabel} path · {pathYearsToRole} years to{' '}
+                <span className="text-[#e9d5ff]">{destinationTitle}</span>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="flex-shrink-0 rounded-[10px] border border-[rgba(250,249,244,.2)] bg-transparent px-[14px] py-[8px] text-[12px] font-[700] text-[#FAF9F4] transition hover:bg-[rgba(255,255,255,.08)]"
+            onClick={() => nav('/3')}
+          >
+            View path →
+          </button>
+        </div>
+
         <div className="mb-1 text-[27px] leading-[1.2] [font-family:'DM Serif Display',serif]">
           What&apos;s missing from your profile
         </div>
-        <p className="mb-2 max-w-[720px] text-[13px] leading-[1.55] text-[#555]">
+        <p className="mb-6 max-w-[720px] text-[13px] leading-[1.55] text-[#555]">
           Based on live JD analysis and profiles similar to yours on Apna. Gaps are grouped so you can prioritise — critical
           items block shortlisting; missing items hurt interviews; needed items strengthen your case.
-        </p>
-        <p className="mb-6 text-[12px] font-[700] text-[#37017B]">
-          ⚡ Accelerated path · ~{accelYrs ?? '—'} year target for {destinationTitle}
         </p>
 
         {/* Social proof */}

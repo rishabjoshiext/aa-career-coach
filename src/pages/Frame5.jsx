@@ -12,7 +12,7 @@ import {
   chartYearTicks,
   cumulativeExtraLacs,
   fmtRupeeMoK,
-} from '../utils/roiOpenAI.js'
+} from '../utils/roiModel.js'
 import { formatBudgetLacs } from '../utils/formatINR.js'
 
 const PATH_TABS = [
