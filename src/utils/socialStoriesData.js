@@ -2,7 +2,7 @@
 
 export const PLATFORM_METRICS = [
   { value: '1L+', label: 'Learners coached', icon: 'learners' },
-  { value: '16+', label: 'UGC-DEB approved', icon: 'degree' },
+  { value: '16+', label: 'UGC-DEB approved partners', icon: 'degree' },
   { value: '97%', label: 'Course-fit satisfaction', icon: 'satisfaction' },
   { value: '2.3x', label: 'Avg. salary growth post-degree', icon: 'growth' },
 ]
