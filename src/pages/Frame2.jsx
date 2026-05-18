@@ -215,11 +215,7 @@ export function Frame2() {
           Your potential <em className="text-[#37017B] not-italic">career destinations</em>
         </div>
         <div className="mb-[14px] text-[13px] leading-[1.55] text-[#555]">
-          Data-backed outcomes for <strong className="font-[800] text-[#0C0C0C]">{anchorTitle || 'your goal'}</strong>
-          {s.exp !== 'fresher' && String(s.role || '').trim()
-            ? ' — from your current designation.'
-            : ' — from your dream role (no current title yet).'}{' '}
-          Filters show every role in each relevant area from our catalogue — pick any card to see your journey.
+        Real, data-backed career outcomes for the <strong>role you aspire</strong> to, even if you’re not there yet. Explore opportunities across relevant domains and <strong>tap into the journey</strong> behind every role in our catalogue.  
         </div>
 
         <div className="mb-[14px] rounded-[11px] border border-[rgba(117,4,255,.2)] bg-[linear-gradient(135deg,rgba(117,4,255,.06),rgba(55,1,123,.04))] px-4 py-[12px]">

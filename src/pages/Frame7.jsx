@@ -142,13 +142,13 @@ export function Frame7() {
         </div>
 
         <h1 className="mb-3 text-[30px] font-[400] leading-[1.12] tracking-[-0.02em] text-[#0C0C0C] md:text-[34px] [font-family:'DM Serif Display',serif]">
-          The specialisation{' '}
+          The right specialisation for{' '}
           <span className="font-[400] italic" style={{ color: ACCENT }}>
-            your gaps.
+            your profile.
           </span>
         </h1>
-        <p className="mb-7 max-w-[720px] text-[14px] font-[400] leading-[1.6] text-[#555]">
-          Based on your gap analysis, here is the exact qualification that covers every critical gap in your profile.
+        <p className="mb-6 max-w-[720px] text-[14px] font-[400] leading-[1.6] text-[#555]">
+        Based on your gap analysis, here is the qualification designed to help you bridge your most critical career gaps. 
         </p>
 
         {/* Transition plan card — mirrors prototype + Frame 1 fields */}

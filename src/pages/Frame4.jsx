@@ -600,13 +600,12 @@ export function Frame4() {
           What&apos;s missing from your profile
         </div>
         <p className="mb-6 max-w-[720px] text-[13px] leading-[1.55] text-[#555]">
-          Based on live JD analysis and profiles similar to yours on Apna. Gaps are grouped so you can prioritise — critical
-          items block shortlisting; missing items hurt interviews; needed items strengthen your case.
+        Based on live JD analysis and profiles like yours on Apna, your gaps are prioritised to help improve shortlisting, interviews and overall profile strength.
         </p>
 
         {/* Social proof */}
         <div className="mb-6 rounded-[12px] border border-[rgba(72,219,133,.35)] bg-[rgba(72,219,133,.12)] px-[16px] py-[12px] text-[12.5px] font-[600] leading-[1.5] text-[#14532d]">
-          Of {profilesN} profiles with your background who reached{' '}
+          Out of {profilesN} profiles with your background who reached{' '}
           <strong className="font-[800] text-[#052e16]">{destinationTitle}</strong>,{' '}
           {socialPct}% closed every Critical gap below before getting shortlisted.
         </div>

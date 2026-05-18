@@ -171,15 +171,10 @@ export function Frame5() {
           </button>
         </div>
 
-        <div className="mb-2 text-[27px] leading-[1.2] [font-family:'DM Serif Display',serif]">
-          Earnings <em className="text-[#6320EE] not-italic">with</em> vs{' '}
+        <div className="mb-6 text-[27px] leading-[1.2] [font-family:'DM Serif Display',serif]">
+        Where your career pays off: Earnings <em className="text-[#6320EE] not-italic">with</em> vs{' '}
           <em className="text-[#6320EE] not-italic">without</em> action.
         </div>
-        <p className="mb-6 max-w-[720px] text-[13px] leading-[1.55] text-[#555]">
-          Select a path and target year to see your salary growth — and what stagnation costs you. Figures use your current
-          package (~{fmtLacs(salaryLpa)} LPA) and upskilling budget (₹{eduBudgetLacs}L); projections are tailored to{' '}
-          <strong className="text-[#0C0C0C]">{destinationTitle}</strong>.
-        </p>
 
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap gap-2">
