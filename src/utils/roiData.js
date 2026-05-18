@@ -5,11 +5,24 @@ export const ROI_YEARS = [3, 5, 7, 10]
 /** Annual compounding uplift on gross income for “no structured move” trajectory */
 export const STAGNATION_RATE = 0.055
 
-/** Path-specific annual income growth (includes role transitions toward destination) */
+/** Path-specific annual income growth — accel > fast > trad (returns) */
 export const PATH_GROWTH = {
-  trad: 0.095,
-  fast: 0.12,
-  accel: 0.145,
+  trad: 0.088,
+  fast: 0.118,
+  accel: 0.152,
+}
+
+/** Upskilling spend vs user budget — accel lowest, trad highest (investment) */
+export const PATH_INVESTMENT_MULT = {
+  accel: 0.82,
+  fast: 1.0,
+  trad: 1.28,
+}
+
+export function pathInvestmentLacs(pathKey, budgetLacs) {
+  const b = Number(budgetLacs) || 0
+  const mult = PATH_INVESTMENT_MULT[pathKey] ?? 1
+  return Math.round(b * mult * 10) / 10
 }
 
 /**

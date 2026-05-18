@@ -22,10 +22,17 @@ export const PATH_TOTAL_BOX_COUNTS = {
   accelerated: 4,
 }
 
-const YEAR_ANCHORS = {
-  traditional: [0.6, 1.8, 3.6, 5.4, 7.2, 9],
-  fastTrack: [0.6, 2.3, 4.7, 5.8, 7],
-  accelerated: [0.6, 2.5, 5],
+/** Path end years — must match `timelineLayout.js` PATH_END_YEARS. */
+const PATH_END_YEARS = {
+  traditional: 7,
+  fastTrack: 5.5,
+  accelerated: 4,
+}
+
+const YEAR_FRACTIONS = {
+  traditional: [0.1, 0.28, 0.45, 0.62, 0.78, 1],
+  fastTrack: [0.11, 0.3, 0.52, 0.76, 1],
+  accelerated: [0.2, 0.55, 1],
 }
 
 const UPSKILL_BY_DOMAIN = {
@@ -72,18 +79,16 @@ const UPSKILL_BY_DOMAIN = {
  */
 function yearsForPath(count, totalYears, pathKey) {
   const key = pathKey === 'fastTrack' ? 'fastTrack' : pathKey
-  const anchors = YEAR_ANCHORS[key] || YEAR_ANCHORS.traditional
-  if (count <= anchors.length) {
-    const picked = anchors.slice(0, count)
-    const scale = totalYears / picked[picked.length - 1]
-    return picked.map((y) => +(y * scale).toFixed(1))
+  const endYear = PATH_END_YEARS[key] ?? totalYears
+  const base = YEAR_FRACTIONS[key] || YEAR_FRACTIONS.traditional
+  let fractions = base
+  if (count !== base.length) {
+    fractions = []
+    for (let i = 0; i < count; i += 1) {
+      fractions.push(count === 1 ? 1 : (i + 1) / count)
+    }
   }
-  const out = []
-  for (let i = 0; i < count; i += 1) {
-    const t = count === 1 ? 1 : i / (count - 1)
-    out.push(+(Math.max(0.6, totalYears * t)).toFixed(1))
-  }
-  return out
+  return fractions.map((f) => +(f * endYear).toFixed(1))
 }
 
 /**
@@ -293,6 +298,28 @@ function fillUniqueMiddle(middle, need, targetRole) {
   return sortBySeniority(pickUniqueEvenly(out, need))
 }
 
+/** Guarantee exactly `count` roles (target last); synthesize ladder steps if deduping shrinks the list. */
+function ensureRoleListCount(roles, count, targetRole, candidates = []) {
+  const target = normalizeRole(targetRole)
+  let out = uniquePreserveOrder(roles).filter((r) => roleKey(r) !== roleKey(target))
+  out.push(target)
+
+  let guard = 0
+  while (out.length < count && guard < 24) {
+    guard += 1
+    const needMiddle = Math.max(0, count - 1)
+    const mids = fillUniqueMiddle([...out.slice(0, -1), ...candidates], needMiddle, target)
+    out = uniquePreserveOrder([...mids, target])
+    if (out.length < count) {
+      const stem = extractRoleStem(target)
+      const tier = out.length
+      out.splice(out.length - 1, 0, normalizeRole(`${stem} Professional ${tier}`))
+    }
+  }
+
+  return out.slice(0, count)
+}
+
 /** Ensure milestone roles ascend in seniority (accel upskill node stays first). */
 function orderMilestoneRoles(roles, mode) {
   if (mode === 'accelerated' && roles.length > 1) {
@@ -324,9 +351,7 @@ export function samplePathRoles(pool, count, mode, currentRole, targetRole, ladd
   ).filter((r) => roleKey(r) !== roleKey(target))
 
   if (mode === 'accelerated') {
-    const upskill = UPSKILL_BY_DOMAIN[ladderId] || 'Upskilling'
-    const shortCurrent = current.length > 28 ? `${current.slice(0, 25)}…` : current
-    const first = `${shortCurrent} + ${upskill}`
+    const first = current
     if (count === 1) return [target]
     if (count === 2) return [first, target]
 
@@ -337,10 +362,18 @@ export function samplePathRoles(pool, count, mode, currentRole, targetRole, ladd
         candidates.find((r) => roleSimilarity(r, target) < 0.72) ||
         `${extractRoleStem(target)} Specialist`
     }
-    if (count === 3) return orderMilestoneRoles(uniquePreserveOrder([first, normalizeRole(mid), target]), mode)
+    if (count === 3) {
+      return orderMilestoneRoles(
+        ensureRoleListCount([first, normalizeRole(mid), target], count, target, candidates),
+        mode,
+      )
+    }
 
     const inner = fillUniqueMiddle(candidates, count - 2, target)
-    return orderMilestoneRoles(uniquePreserveOrder([first, ...inner, target]).slice(0, count), mode)
+    return orderMilestoneRoles(
+      ensureRoleListCount([first, ...inner, target], count, target, candidates),
+      mode,
+    )
   }
 
   const middleCount = Math.max(0, count - 1)
@@ -349,7 +382,62 @@ export function samplePathRoles(pool, count, mode, currentRole, targetRole, ladd
     middle = fillUniqueMiddle([...middle, ...candidates], middleCount, target)
   }
 
-  return orderMilestoneRoles(uniquePreserveOrder([...middle.slice(0, middleCount), target]).slice(0, count), mode)
+  return orderMilestoneRoles(
+    ensureRoleListCount([...middle.slice(0, middleCount), target], count, target, candidates),
+    mode,
+  )
+}
+
+const FRAME3_PATH_KEYS = { trad: 'traditional', fast: 'fastTrack', accel: 'accelerated' }
+
+/**
+ * Coerce any journey to canonical 6 / 5 / 3 milestone cards (engine is structural fallback).
+ * @param {object|null} journey
+ * @param {object} fallbackJourney — typically `buildJourneyFromProgressionEngine` output
+ */
+export function coerceJourneyToCanonicalCounts(journey, fallbackJourney) {
+  const fb = fallbackJourney || journey
+  if (!fb?.nodes) return journey || fb
+
+  const out = {
+    ...fb,
+    ...journey,
+    trad: { ...fb.trad, ...journey?.trad, label: journey?.trad?.label || fb.trad?.label || 'Traditional' },
+    fast: { ...fb.fast, ...journey?.fast, label: journey?.fast?.label || fb.fast?.label || 'Fast Track' },
+    accel: { ...fb.accel, ...journey?.accel, label: journey?.accel?.label || fb.accel?.label || 'Accelerated' },
+    nodes: {},
+  }
+
+  for (const pk of ['trad', 'fast', 'accel']) {
+    const want = PATH_MILESTONE_COUNTS[FRAME3_PATH_KEYS[pk]]
+    const preferred = journey?.nodes?.[pk] || []
+    const engineNodes = fb.nodes[pk] || []
+    let nodes =
+      preferred.length === want
+        ? preferred
+        : engineNodes.length === want
+          ? engineNodes
+          : engineNodes.length > want
+            ? engineNodes.slice(0, want)
+            : engineNodes
+
+    while (nodes.length < want && engineNodes.length) {
+      const src = engineNodes[nodes.length] || engineNodes[engineNodes.length - 1]
+      nodes.push({ ...src })
+    }
+
+    nodes = nodes.slice(0, want).map((n, i) => ({
+      ...n,
+      goal: i === want - 1,
+      ...(pk === 'fast' && i === 0 ? { fastTag: n.fastTag || 'self_learning' } : {}),
+      ...(pk === 'fast' && i === 1 ? { fastTag: n.fastTag || 'upskilling' } : {}),
+      ...(pk === 'accel' && i === 0 ? { tag: n.tag !== false } : {}),
+    }))
+
+    out.nodes[pk] = nodes
+  }
+
+  return out
 }
 
 /**
@@ -379,9 +467,9 @@ export function generateCareerProgression(input) {
     (categoryName ? findDestinationMeta(categoryName, targetRole) : null)
 
   const tl = meta?.timeline || {}
-  const tradYears = Number(input.tradYears ?? tl.traditional) || 9
-  const fastYears = Number(input.fastYears ?? tl.fast_track) || 7
-  const accelYears = Number(input.accelYears ?? tl.accelerated) || 5
+  const tradYears = PATH_END_YEARS.traditional
+  const fastYears = PATH_END_YEARS.fastTrack
+  const accelYears = PATH_END_YEARS.accelerated
 
   const salMeta = meta?.target_salary
   const salaryText =
@@ -455,20 +543,22 @@ function defaultNodeDetail(role, brief) {
  */
 export function progressionToFrame3Journey(progression, years = {}) {
   const mapPath = (nodes, pathKey) =>
-    nodes.map((n) => ({
+    nodes.map((n, i) => ({
       r: n.role,
       yr: n.year,
       brief: n.description,
       sal: n.salary,
       goal: n.isTargetRole,
       ...(n.tag ? { tag: true } : {}),
+      ...(pathKey === 'fastTrack' && i === 0 ? { fastTag: 'self_learning' } : {}),
+      ...(pathKey === 'fastTrack' && i === 1 ? { fastTag: 'upskilling' } : {}),
       detail: defaultNodeDetail(n.role, n.description),
     }))
 
   return {
-    trad: { yrs: years.tradYears ?? 9, label: 'Traditional' },
-    fast: { yrs: years.fastYears ?? 7, label: 'Fast Track' },
-    accel: { yrs: years.accelYears ?? 5, label: 'Accelerated' },
+    trad: { yrs: years.tradYears ?? PATH_END_YEARS.traditional, label: 'Traditional' },
+    fast: { yrs: years.fastYears ?? PATH_END_YEARS.fastTrack, label: 'Fast Track' },
+    accel: { yrs: years.accelYears ?? PATH_END_YEARS.accelerated, label: 'Accelerated' },
     nodes: {
       trad: mapPath(progression.traditional, 'traditional'),
       fast: mapPath(progression.fastTrack, 'fastTrack'),

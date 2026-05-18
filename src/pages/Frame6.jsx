@@ -20,7 +20,7 @@ const PATH_LABELS = [
 
 export function Frame6() {
   const nav = useNavigate()
-  const { s, selIndustry, selRole, gapPath } = useAppState()
+  const { s, selIndustry, selRole, gapPath, openPathDrawer } = useAppState()
   const [stories, setStories] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
@@ -90,7 +90,7 @@ export function Frame6() {
         {/* Goal ingress — matches prototype */}
         <button
           type="button"
-          onClick={() => nav('/3')}
+          onClick={openPathDrawer}
           className="mb-5 flex w-full items-center gap-3 rounded-[11px] border border-[rgba(168,85,247,.2)] bg-[linear-gradient(135deg,#0C0C0C,#1a1a1a)] px-[14px] py-[10px] text-left transition hover:border-[rgba(168,85,247,.35)]"
         >
           <span className="text-[20px] text-[#48DB85]" aria-hidden>

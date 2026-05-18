@@ -9,9 +9,17 @@ import { PD } from '../utils/pathData.js'
 import { resolvePdRole } from '../utils/roleKey.js'
 import { resolveJourneySourceCard } from '../utils/journeySourceCard.js'
 import {
-  PATH_MILESTONE_COUNTS,
   buildJourneyFromProgressionEngine,
+  coerceJourneyToCanonicalCounts,
 } from '../journey/progressionEngine.js'
+import {
+  TIMELINE_MAX_YEARS,
+  TIMELINE_ORIGIN_X,
+  PATH_MIN_FIRST_CENTER,
+  applyTimelineToJourney,
+  buildTimelineYearTicks,
+  milestoneCentersForPath,
+} from '../journey/timelineLayout.js'
 import { JOB_LISTINGS, logoKey } from '../utils/jobsData.js'
 import { JobDetailModal } from '../components/modals/JobDetailModal.jsx'
 import { formatSalaryLabelIndian } from '../utils/formatINR.js'
@@ -25,30 +33,55 @@ const PATHS = [
 
 const PY = { trad: 90, fast: 270, accel: 450 }
 const PCOL = { trad: '#888', fast: '#FFD700', accel: '#48DB85' }
-/** Future milestone cards per path (NOW circle is separate). */
-const PATH_NODE_COUNTS = {
-  trad: PATH_MILESTONE_COUNTS.traditional,
-  fast: PATH_MILESTONE_COUNTS.fastTrack,
-  accel: PATH_MILESTONE_COUNTS.accelerated,
+const NOW_CIRCLE_LEFT = 4
+const NOW_CIRCLE_SIZE = 92
+const PATH_LABEL_X = NOW_CIRCLE_LEFT + NOW_CIRCLE_SIZE + 14
+const PATH_LABEL_Y_OFFSET = 26
+const TIMELINE_START_X = TIMELINE_ORIGIN_X
+const PX_PER_YEAR = 185
+const TIMELINE_END_PAD = 200
+
+function milestoneDisplayTitle(pk, idx, n, currentRole) {
+  if (pk === 'accel' && idx === 0) {
+    const cur = String(currentRole || '').trim()
+    if (cur) return cur
+  }
+  return n.r
 }
 
+function MilestonePathBadge({ pk, n }) {
+  if (pk === 'accel' && n.tag) {
+    return (
+      <div className="mb-[6px]">
+        <span className="inline-flex rounded-[8px] border-2 border-[rgba(168,85,247,.65)] bg-[linear-gradient(135deg,rgba(117,4,255,.5),rgba(72,219,133,.22))] px-[11px] py-[5px] text-[10.5px] font-[900] uppercase tracking-[.1em] text-[#f3e8ff] shadow-[0_0_14px_rgba(117,4,255,.4)]">
+          + Degree
+        </span>
+      </div>
+    )
+  }
+  if (pk === 'fast' && n.fastTag === 'self_learning') {
+    return (
+      <div className="mb-[5px] text-[10px] font-[800] uppercase tracking-[.07em] text-[#FFD700]">
+        + Self learning
+      </div>
+    )
+  }
+  if (pk === 'fast' && n.fastTag === 'upskilling') {
+    return (
+      <div className="mb-[5px] text-[10px] font-[800] uppercase tracking-[.07em] text-[#FFD700]">
+        + upskilling
+      </div>
+    )
+  }
+  return null
+}
 function jobsForRole(roleName) {
   return JOB_LISTINGS[roleName] || []
 }
 
-function journeyHasCanonicalLengths(j) {
-  if (!j?.nodes) return false
-  return (
-    j.nodes.trad?.length === PATH_NODE_COUNTS.trad &&
-    j.nodes.fast?.length === PATH_NODE_COUNTS.fast &&
-    j.nodes.accel?.length === PATH_NODE_COUNTS.accel
-  )
-}
-
-/** Hand-tuned PD or engine output — coerce to canonical 6 / 5 / 3 milestones. */
-function ensureCanonicalJourney(raw, card, currentRole, profile) {
-  if (raw && journeyHasCanonicalLengths(raw)) return enrichJourneyDetails(raw)
-  return buildJourneyFromProgressionEngine(card, currentRole, profile)
+/** Hand-tuned PD merged with engine — always exactly 6 / 5 / 3 milestone cards. */
+function ensureCanonicalJourney(raw, engineJourney) {
+  return enrichJourneyDetails(coerceJourneyToCanonicalCounts(raw, engineJourney))
 }
 
 function defaultNodeDetail() {
@@ -67,12 +100,14 @@ function defaultNodeDetail() {
 function enrichJourneyDetails(parsed) {
   const out = { ...parsed, nodes: { ...parsed.nodes } }
   for (const pk of ['trad', 'fast', 'accel']) {
-    out.nodes[pk] = (parsed.nodes[pk] || []).map((n) => {
+    out.nodes[pk] = (parsed.nodes[pk] || []).map((n, i) => {
       const d = n.detail
       const ok = d && Array.isArray(d.what) && d.what.length >= 4 && Array.isArray(d.skills) && d.skills.length >= 4
       return {
         ...n,
         detail: ok ? d : { ...defaultNodeDetail(), lifestyle: d?.lifestyle || defaultNodeDetail().lifestyle },
+        ...(pk === 'fast' && i === 0 && !n.fastTag ? { fastTag: 'self_learning' } : {}),
+        ...(pk === 'fast' && i === 1 && !n.fastTag ? { fastTag: 'upskilling' } : {}),
       }
     })
   }
@@ -81,7 +116,7 @@ function enrichJourneyDetails(parsed) {
 
 export function Frame3() {
   const nav = useNavigate()
-  const { s, selRole, selIndustry } = useAppState()
+  const { s, selRole, selIndustry, setGapPath, setRPath } = useAppState()
   const fallbackRole = resolvePdRole(selRole)
   const roleTitle = (selRole && String(selRole).trim()) || fallbackRole
 
@@ -98,15 +133,51 @@ export function Frame3() {
   )
 
   const d = useMemo(() => {
-    const raw = pdStatic && journeyHasCanonicalLengths(pdStatic) ? pdStatic : engineJourney
-    return ensureCanonicalJourney(raw, journeyCard, s.role || '', s)
-  }, [pdStatic, engineJourney, journeyCard, s])
+    const base = ensureCanonicalJourney(pdStatic, engineJourney)
+    return applyTimelineToJourney(base)
+  }, [pdStatic, engineJourney])
 
   const pathTrack = useMemo(() => {
-    const m = Math.max(d.nodes.trad.length, d.nodes.fast.length, d.nodes.accel.length)
-    const gap = Math.min(280, Math.max(218, Math.floor(1700 / Math.max(m, 1))))
-    const canvasW = 120 + m * gap + 360
-    return { maxNodes: m, gap, canvasW }
+    const timelineMax = TIMELINE_MAX_YEARS
+    const canvasW = TIMELINE_START_X + timelineMax * PX_PER_YEAR + TIMELINE_END_PAD
+    const xForYear = (yr) => TIMELINE_START_X + Number(yr || 0) * PX_PER_YEAR
+    const pathEndX = (pk) => xForYear(d[pk].yrs)
+    const fastCenters = milestoneCentersForPath(
+      d.nodes.fast,
+      xForYear,
+      200,
+      PATH_MIN_FIRST_CENTER.fast,
+      pathEndX('fast'),
+    )
+    const accelEndX = pathEndX('accel')
+    const accelCenters =
+      fastCenters.length >= 2 && d.nodes.accel.length === 3
+        ? [fastCenters[0], fastCenters[1], accelEndX]
+        : milestoneCentersForPath(
+            d.nodes.accel,
+            xForYear,
+            200,
+            PATH_MIN_FIRST_CENTER.accel,
+            accelEndX,
+          )
+    const centersByPath = {
+      trad: milestoneCentersForPath(
+        d.nodes.trad,
+        xForYear,
+        200,
+        PATH_MIN_FIRST_CENTER.trad,
+        pathEndX('trad'),
+      ),
+      fast: fastCenters,
+      accel: accelCenters,
+    }
+    return {
+      timelineMax,
+      canvasW,
+      xForYear,
+      centersByPath,
+      yearTicks: buildTimelineYearTicks(timelineMax),
+    }
   }, [d])
 
   const [filter, setFilter] = useState('all')
@@ -127,19 +198,16 @@ export function Frame3() {
   const saveYears = d.trad.yrs - d.accel.yrs
 
   const linesSvg = useMemo(() => {
-    const sX = 120
+    const sX = TIMELINE_START_X
     const sY = 270
-    const nodeGap = pathTrack.gap
-    const maxX = pathTrack.canvasW
+    const { xForYear, yearTicks, canvasW: maxX } = pathTrack
     let svg = ''
 
-    for (let yr = 1; yr <= 12; yr += 1) {
-      const x = sX + yr * 185
-      if (x > maxX) break
+    for (const yr of yearTicks) {
+      const x = xForYear(yr)
+      if (x > maxX - 40) break
       svg += `<line x1="${x}" y1="30" x2="${x}" y2="490" stroke="rgba(255,255,255,0.03)" stroke-width="1" stroke-dasharray="2,8" />`
-      if ([1, 2, 3, 5, 7, 9].includes(yr)) {
-        svg += `<text x="${x}" y="16" text-anchor="middle" font-size="10" fill="rgba(255,255,255,0.42)" font-family="Outfit" font-weight="700">Yr ${yr}</text>`
-      }
+      svg += `<text x="${x}" y="16" text-anchor="middle" font-size="10" fill="rgba(255,255,255,0.42)" font-family="Outfit" font-weight="700">Yr ${yr}</text>`
     }
 
     ;[
@@ -156,13 +224,14 @@ export function Frame3() {
       const op = isActive ? 1 : 0.05
       const sw = isActive ? (pk === 'accel' ? 3 : 2) : 1
       const ns = d.nodes[pk]
-      const centerAt = (idx) => sX + (idx + 1) * nodeGap
+      const centers = pathTrack.centersByPath[pk]
+      const centerAt = (idx) => centers[idx] ?? xForYear(ns[idx]?.yr ?? 0)
       const fCX = centerAt(0)
       const fLE = fCX - 82
       const start =
         pk === 'trad'
           ? `M ${sX},${sY} C ${sX + 100},${sY} ${fLE - 70},${py} ${fLE},${py}`
-          : pk === 'fast'
+          : pk === 'fast' || pk === 'accel'
             ? `M ${sX},${sY} C ${sX + 60},${sY} ${fLE - 30},${py} ${fLE},${py}`
             : `M ${sX},${sY} C ${sX + 100},${sY} ${fLE - 70},${py} ${fLE},${py}`
       let pth = start
@@ -172,9 +241,7 @@ export function Frame3() {
         pth += ` M ${cx1 + 82},${py} L ${cx2 - 82},${py}`
       }
       const col = { trad: '#666', fast: '#FFD700', accel: '#48DB85' }[pk]
-      const labelCol = pk === 'trad' ? '#FAF9F4' : col
       svg += `<path d="${pth}" fill="none" stroke="${col}" stroke-width="${sw}" opacity="${op}" />`
-      svg += `<text x="128" y="${py - 24}" font-size="12" fill="${isActive ? labelCol : 'rgba(255,255,255,0.14)'}" font-family="Outfit" font-weight="900" letter-spacing="0.05em">${isActive ? d[pk].label.toUpperCase() : ''}</text>`
     })
 
     return svg
@@ -265,7 +332,9 @@ export function Frame3() {
     [zoom],
   )
 
-  const startRole = (s.role || 'Current').substring(0, 12)
+  const currentRoleFull = (s.role || '').trim() || 'Current'
+  const startRole =
+    currentRoleFull.length > 14 ? `${currentRoleFull.slice(0, 12)}…` : currentRoleFull
 
   const selectedDetail = useMemo(() => {
     if (!selectedNode) return null
@@ -445,21 +514,50 @@ export function Frame3() {
               dangerouslySetInnerHTML={{ __html: `<defs></defs>${linesSvg}` }}
             />
 
-            <div className="absolute left-[34px] flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full border-2 border-[rgba(250,249,244,.28)] bg-[rgba(250,249,244,.08)]" style={{ top: `${270 - 46}px` }}>
+            <div className="pointer-events-none absolute inset-0 z-[3]">
+              {['trad', 'fast', 'accel'].map((pk) => {
+                const isActive = filter === 'all' || filter === pk
+                const labelX = PATH_LABEL_X
+                const labelY = PY[pk] - PATH_LABEL_Y_OFFSET
+                const labelCol = pk === 'trad' ? '#FAF9F4' : PCOL[pk]
+                return (
+                  <div
+                    key={`path-label-${pk}`}
+                    className="absolute whitespace-nowrap text-[11px] font-[900] uppercase tracking-[.05em]"
+                    style={{
+                      left: `${labelX}px`,
+                      top: `${labelY}px`,
+                      color: labelCol,
+                      opacity: isActive ? 1 : 0.14,
+                    }}
+                  >
+                    {d[pk].label.toUpperCase()}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div
+              className="absolute z-[2] flex flex-col items-center justify-center rounded-full border-2 border-[rgba(250,249,244,.28)] bg-[rgba(250,249,244,.08)]"
+              style={{
+                left: `${NOW_CIRCLE_LEFT}px`,
+                top: `${270 - NOW_CIRCLE_SIZE / 2}px`,
+                width: `${NOW_CIRCLE_SIZE}px`,
+                height: `${NOW_CIRCLE_SIZE}px`,
+              }}
+            >
               <div className="text-[10.5px] font-[900] uppercase tracking-[.06em] text-[#FAF9F4]">NOW</div>
               <div className="mt-[3px] px-1 text-center text-[8.5px] text-[rgba(250,249,244,.45)]">{startRole}</div>
             </div>
 
-            <div className="absolute inset-0">
+            <div className="absolute inset-0 z-[1]">
               {['trad', 'fast', 'accel'].map((pk) => {
                 const isActive = filter === 'all' || filter === pk
                 const op = isActive ? 1 : 0.07
                 const py = PY[pk]
-                const sX = 120
-                const centerAt = (idx) => sX + (idx + 1) * pathTrack.gap
                 const CH = 92
                 return d.nodes[pk].map((n, idx) => {
-                  const cx = centerAt(idx)
+                  const cx = pathTrack.centersByPath[pk][idx] ?? pathTrack.xForYear(n.yr)
                   const cardX = cx - 88
                   const cardY = py - CH / 2
                   const isGoal = Boolean(n.goal)
@@ -485,7 +583,11 @@ export function Frame3() {
                         opacity: op,
                         ['--mc']: PCOL[pk],
                       }}
-                      onClick={() => setSelectedNode({ pathKey: pk, idx })}
+                      onClick={() => {
+                        setSelectedNode({ pathKey: pk, idx })
+                        setGapPath(pk)
+                        setRPath(pk)
+                      }}
                     >
                       <div className="milestone-tile-inner transition-opacity duration-200">
                         {isGoal ? (
@@ -495,10 +597,10 @@ export function Frame3() {
                         ) : (
                           <div className="mb-[9px] h-[2.5px] rounded-[2px]" style={{ background: PCOL[pk] }} />
                         )}
-                        <div className="mb-[3px] text-[11px] font-[800] leading-[1.3] text-[#FAF9F4]">{n.r}</div>
-                        <div className="mb-[4px] flex items-center gap-[5px] text-[9px] font-[700]" style={{ color: PCOL[pk] }}>
-                          Year {n.yr} {n.tag ? <span className="rounded-[10px] bg-[rgba(117,4,255,.3)] px-[6px] py-[1.5px] text-[7.5px] font-[800] text-[#e879f9]">+DEGREE</span> : null}
+                        <div className="mb-[3px] text-[11px] font-[800] leading-[1.3] text-[#FAF9F4]">
+                          {milestoneDisplayTitle(pk, idx, n, currentRoleFull)}
                         </div>
+                        <MilestonePathBadge pk={pk} n={n} />
                         <div className="mb-[6px] text-[9px] leading-[1.45] text-[rgba(250,249,244,.42)]">{n.brief}</div>
                         <div className="text-[10px] font-[800]" style={{ color: isActive ? PCOL[pk] : '#888' }}>
                           {formatSalaryLabelIndian(n.sal)}
@@ -540,10 +642,15 @@ export function Frame3() {
                 <div className="mb-[7px] inline-block rounded-[20px] border px-[9px] py-[3px] text-[8.5px] font-[800] uppercase tracking-[.07em]" style={{ color: selectedDetail.col, borderColor: `${selectedDetail.col}44`, background: `${selectedDetail.col}22` }}>
                   {selectedDetail.pathKey === 'trad' ? '📈 Traditional' : selectedDetail.pathKey === 'fast' ? '⚡ Fast Track' : '🚀 Accelerated'}
                 </div>
-                <div className="mb-[3px] text-[16px] [font-family:'DM Serif Display',serif]">{selectedDetail.node.r}</div>
-                <div className="mb-1 text-[10px] font-[700]" style={{ color: selectedDetail.col }}>
-                  Year {selectedDetail.node.yr}
+                <div className="mb-[3px] text-[16px] [font-family:'DM Serif Display',serif]">
+                  {milestoneDisplayTitle(
+                    selectedDetail.pathKey,
+                    selectedNode?.idx ?? 0,
+                    selectedDetail.node,
+                    currentRoleFull,
+                  )}
                 </div>
+                <MilestonePathBadge pk={selectedDetail.pathKey} n={selectedDetail.node} />
                 <div className="mb-2 text-[20px] font-[900]" style={{ color: selectedDetail.col }}>
                   {formatSalaryLabelIndian(selectedDetail.node.sal)}
                 </div>
@@ -635,18 +742,27 @@ export function Frame3() {
           )}
         </div>
 
-        <div className="mt-2 flex flex-shrink-0 items-center justify-between">
+        <div className="mt-2 flex flex-shrink-0 items-center justify-between gap-3">
           <div className="text-[12px] text-[rgba(250,249,244,.4)]">
-            Accelerated path saves <strong className="text-[#FAF9F4]">{saveYears} years</strong> vs Traditional
+            {selectedNode ? (
+              <>
+                Accelerated path saves <strong className="text-[#FAF9F4]">{saveYears} years</strong> vs Traditional
+              </>
+            ) : (
+              <span className="text-[rgba(250,249,244,.55)]">
+                Click a milestone on your preferred path to continue
+              </span>
+            )}
           </div>
           <div className="flex gap-2">
             <Button variant="ghost" className="border-[rgba(255,255,255,.1)] text-[rgba(250,249,244,.4)] hover:bg-[rgba(255,255,255,.06)]" onClick={() => nav('/2')}>
               ← Back
             </Button>
             <Button
-              className="bg-[#7504FF] shadow-[0_4px_16px_rgba(117,4,255,.3)] hover:bg-[#7504FF]"
+              className="bg-[#7504FF] shadow-[0_4px_16px_rgba(117,4,255,.3)] hover:bg-[#7504FF] disabled:opacity-40 disabled:shadow-none"
               onClick={() => setGapLoading(true)}
-              disabled={gapLoading}
+              disabled={gapLoading || !selectedNode}
+              title={selectedNode ? undefined : 'Select a milestone on your preferred career path first'}
             >
               See What&apos;s Missing →
             </Button>

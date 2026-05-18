@@ -6,12 +6,22 @@ import { resolvePdRole } from '../utils/roleKey.js'
 import { flattenIndustryRoles, INDUSTRIES } from '../utils/fasttrackData.js'
 import { PD } from '../utils/pathData.js'
 import {
+  buildEducationGapBlock,
   buildFallbackGaps,
+  buildInvestmentCalc,
+  buildExperienceGapBlock,
+  buildPersonalDevGapBlock,
+  buildSkillsGapBlock,
   getStaticGapsForRole,
+  shouldShowMbaInvestment,
 } from '../utils/gapAnalysis.js'
-import { formatCountIN, formatRupee, formatRupeeMonthly } from '../utils/formatINR.js'
-
-const GAP_PATH = 'accel'
+import { resolveUserJourney } from '../utils/resolveJourney.js'
+import {
+  formatCountIN,
+  formatRupee,
+  formatRupeeMonthly,
+  formatRupeeMonthlyBand,
+} from '../utils/formatINR.js'
 
 const PATH_LABELS = [
   { key: 'accel', label: 'Accelerated' },
@@ -31,13 +41,37 @@ const GAP_CATS = ['edu', 'skill', 'exp', 'dev']
 /** skill and dev items get a per-item counselor assess dropdown */
 const ASSESSABLE_CATS = new Set(['skill', 'dev'])
 
+/** skill / exp / dev — title + subtext only (no warnings or action bullets) */
+const MINIMAL_GAP_CATS = new Set(['skill', 'exp', 'dev'])
+
 const ITEM_ASSESS_OPTS = [
   { value: '', label: 'Assess →' },
-  { value: 'qual', label: '✓ Qualified' },
-  { value: 'miss', label: '✗ Missing' },
-  { value: 'crit', label: '✗ Critical gap' },
-  { value: 'need', label: '~ Partial' },
+  { value: 'beginner', label: 'Beginner' },
+  { value: 'intermediate', label: 'Intermediate' },
+  { value: 'advanced', label: 'Advanced' },
 ]
+
+const ASSESS_LEVELS = new Set(['beginner', 'intermediate', 'advanced'])
+
+function assessSelectUi(level) {
+  if (level === 'beginner') {
+    return 'border-[rgba(248,113,113,.45)] bg-[#fee2e2] text-[#b91c1c]'
+  }
+  if (level === 'intermediate') {
+    return 'border-[rgba(250,204,21,.5)] bg-[#fef9c3] text-[#a16207]'
+  }
+  if (level === 'advanced' || level === 'strong') {
+    return 'border-[rgba(74,222,128,.45)] bg-[#dcfce7] text-[#15803d]'
+  }
+  return 'border-[rgba(0,0,0,.08)] bg-white text-[#888]'
+}
+
+function assessGiBoxUi(level) {
+  if (level === 'beginner') return 'border-[#f87171] bg-[rgba(254,226,226,.55)]'
+  if (level === 'intermediate') return 'border-[#eab308] bg-[rgba(254,249,195,.55)]'
+  if (level === 'advanced' || level === 'strong') return 'border-[#22c55e] bg-[rgba(220,252,231,.55)]'
+  return 'border-[#ccc] bg-[#f9f9f9]'
+}
 
 function pillUi(pill) {
   if (pill === 'crit') return 'border-[rgba(239,68,68,.35)] bg-[rgba(239,68,68,.08)] text-[#b91c1c]'
@@ -72,7 +106,21 @@ function giBoxUi(pill) {
 
 /** Collapsible investment options — inside Education accordion (HTML inv-blk) */
 function InvestmentBlock({ investCalc, salaryMonthly, dMode, collapsed, onToggleHead }) {
-  const { ftLump, ftMonthly, wsMonthly, wsTotal } = investCalc
+  const {
+    ftMinL,
+    ftMaxL,
+    ftEmiMin,
+    ftEmiMax,
+    ftEmiAvg,
+    wsMinL,
+    wsMaxL,
+    wsEmiMin,
+    wsEmiMax,
+    wsEmiAvg,
+    tenureMo,
+    suggestsMba,
+  } = investCalc
+  const ftTitle = suggestsMba ? 'Full-time MBA' : 'Full-time Degree'
   const breakNote =
     dMode === 'break'
       ? `~${formatRupee(salaryMonthly * 24)} in earnings`
@@ -81,7 +129,7 @@ function InvestmentBlock({ investCalc, salaryMonthly, dMode, collapsed, onToggle
   const optBFeatures = [
     'Weekend live classes — keep your salary',
     'UGC recognised · same degree weight',
-    'EMI ≈ 18% of current monthly income',
+    `Avg EMI ${formatRupeeMonthly(wsEmiAvg)} over ${tenureMo} months`,
     'Earn while you learn — net positive cash flow',
   ]
 
@@ -113,15 +161,17 @@ function InvestmentBlock({ investCalc, salaryMonthly, dMode, collapsed, onToggle
           <div className="mb-[5px] text-[10px] font-[800] uppercase tracking-[.06em] text-[#aaa]">
             Option A · Career Break
           </div>
-          <div className="mb-[7px] text-[13px] font-[800]">Full-time Degree</div>
-          <div className="mb-[8px] flex items-baseline gap-[5px]">
+          <div className="mb-[7px] text-[13px] font-[800]">{ftTitle}</div>
+          <div className="mb-[4px] flex flex-wrap items-baseline gap-x-[5px] gap-y-[2px]">
             <span className="font-['DM_Serif_Display',serif] text-[22px] leading-none text-[#37017B]">
-              {formatRupee(ftLump)}
+              ₹{ftMinL}–{ftMaxL} L
             </span>
-            <span className="text-[11px] text-[#555]">
-              total · or {formatRupeeMonthly(ftMonthly)} EMI
-            </span>
+            <span className="text-[11px] text-[#555]">programme total</span>
           </div>
+          <p className="mb-[8px] text-[10.5px] leading-[1.45] text-[#666]">
+            Avg EMI {formatRupeeMonthly(ftEmiAvg)} · range {formatRupeeMonthlyBand(ftEmiMin, ftEmiMax)} over{' '}
+            {tenureMo} months if financed
+          </p>
           {['2-year full-time programme', 'Campus placements + alumni network', 'Faster completion (24 months)'].map(
             (f) => (
               <div key={f} className="mb-[3px] flex items-start gap-[5px] text-[10.5px] leading-[1.45] text-[#777]">
@@ -144,14 +194,16 @@ function InvestmentBlock({ investCalc, salaryMonthly, dMode, collapsed, onToggle
             Option B · No Break
           </div>
           <div className="mb-[7px] text-[13px] font-[800]">Work + Study Degree</div>
-          <div className="mb-[8px] flex items-baseline gap-[5px]">
+          <div className="mb-[4px] flex flex-wrap items-baseline gap-x-[5px] gap-y-[2px]">
             <span className="font-['DM_Serif_Display',serif] text-[22px] leading-none text-[#37017B]">
-              {formatRupeeMonthly(wsMonthly).replace('/mo', '')}
+              ₹{wsMinL}–{wsMaxL} L
             </span>
-            <span className="text-[11px] text-[#555]">
-              /month{wsTotal > 0 ? ` · ~${formatRupee(wsTotal)} total` : ''}
-            </span>
+            <span className="text-[11px] text-[#555]">programme total</span>
           </div>
+          <p className="mb-[8px] text-[10.5px] leading-[1.45] text-[#666]">
+            Avg EMI {formatRupeeMonthly(wsEmiAvg)} · range {formatRupeeMonthlyBand(wsEmiMin, wsEmiMax)} over{' '}
+            {tenureMo} months if financed
+          </p>
           {optBFeatures.map((f) => (
             <div key={f} className="mb-[3px] flex items-start gap-[5px] text-[10.5px] leading-[1.45] text-[#777]">
               <span className="shrink-0 font-[800] text-[#37017B]">·</span>
@@ -165,7 +217,8 @@ function InvestmentBlock({ investCalc, salaryMonthly, dMode, collapsed, onToggle
   )
 }
 
-function BudgetBlock({ salaryMonthly, monthlyBudget, onBudgetChange, editing, onToggleEdit }) {
+function BudgetBlock({ salaryMonthly, monthlyBudget, onBudgetChange, editing, onToggleEdit, investCalc }) {
+  const { ftEmiAvg, wsEmiAvg, suggestsMba } = investCalc || {}
   return (
     <div className="mx-[16px] mb-[14px] rounded-[10px] border-[1.5px] border-[rgba(55,1,123,.2)] bg-[linear-gradient(135deg,rgba(55,1,123,.05),rgba(117,4,255,.03))] px-[14px] py-[12px]">
       <div className="mb-[8px] flex items-center justify-between gap-2">
@@ -199,7 +252,9 @@ function BudgetBlock({ salaryMonthly, monthlyBudget, onBudgetChange, editing, on
         <span className="text-[12px] font-[700] text-[#888]">/month</span>
       </div>
       <p className="text-[10.5px] leading-[1.5] text-[#666]">
-        Based on {formatRupeeMonthly(salaryMonthly)} salary · 18% of income · fits a BBA/MBA EMI comfortably
+        Based on {formatRupeeMonthly(salaryMonthly)} salary · 18% of income · avg full-time{' '}
+        {suggestsMba ? 'MBA' : 'degree'} EMI {ftEmiAvg ? formatRupeeMonthly(ftEmiAvg) : '—'} · work+study avg{' '}
+        {wsEmiAvg ? formatRupeeMonthly(wsEmiAvg) : '—'}
       </p>
     </div>
   )
@@ -285,8 +340,17 @@ function GapCategoryCard({
             {block.items.map((it, idx) => {
               const assessKey = `${cat}-${idx}`
               const assessed = isAssessable ? (itemAssess[assessKey] ?? '') : null
-              const displayPill = assessed !== null ? (assessed === '' ? 'unass' : assessed) : it.pill
-              const boxPill = isAssessable && !assessed ? 'unass' : displayPill || 'need'
+              const hasAssessLevel = ASSESS_LEVELS.has(assessed)
+              const displayPill = isAssessable
+                ? hasAssessLevel
+                  ? assessed
+                  : 'unass'
+                : it.pill
+              const boxPill = isAssessable
+                ? hasAssessLevel
+                  ? assessed
+                  : 'unass'
+                : it.pill || 'need'
 
               return (
                 <div
@@ -294,29 +358,37 @@ function GapCategoryCard({
                   className="flex gap-[10px] border-b border-[rgba(0,0,0,.06)] py-[12px] last:border-b-0"
                 >
                   <div
-                    className={['w-[4px] shrink-0 self-stretch rounded-[3px] border', giBoxUi(boxPill)].join(' ')}
+                    className={[
+                      'w-[4px] shrink-0 self-stretch rounded-[3px] border',
+                      isAssessable && hasAssessLevel ? assessGiBoxUi(assessed) : giBoxUi(boxPill),
+                    ].join(' ')}
                     aria-hidden
                   />
                   <div className="min-w-0 flex-1">
                     <div className="text-[13px] font-[800] leading-snug text-[#0C0C0C]">{it.n}</div>
                     <p className="mt-[4px] text-[12px] leading-[1.5] text-[#555]">{it.d}</p>
-                    {it.w ? (
+                    {!MINIMAL_GAP_CATS.has(cat) && it.w ? (
                       <p className="mt-[4px] text-[11px] font-[600] text-[#b83000]">⚠ {it.w}</p>
                     ) : null}
-                    <div className="mt-[6px] space-y-[4px]">
-                      {it.actions?.map((a) => (
-                        <div key={a} className="text-[11.5px] leading-[1.45] text-[#666]">
-                          · {a}
-                        </div>
-                      ))}
-                    </div>
+                    {!MINIMAL_GAP_CATS.has(cat) && it.actions?.length ? (
+                      <div className="mt-[6px] space-y-[4px]">
+                        {it.actions.map((a) => (
+                          <div key={a} className="text-[11.5px] leading-[1.45] text-[#666]">
+                            · {a}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-[6px]">
                     {isAssessable ? (
                       <select
                         value={assessed ?? ''}
                         onChange={(e) => onItemAssess(cat, idx, e.target.value)}
-                        className="cursor-pointer rounded-[6px] border border-[rgba(0,0,0,.08)] bg-white px-[6px] py-[3px] text-[10px] font-[600] text-[#888] outline-none focus:border-[#37017B] focus:ring-1 focus:ring-[#37017B]"
+                        className={[
+                          'cursor-pointer rounded-[6px] border px-[6px] py-[3px] text-[10px] font-[700] outline-none focus:ring-1 focus:ring-[#37017B]',
+                          assessSelectUi(hasAssessLevel ? assessed : ''),
+                        ].join(' ')}
                       >
                         {ITEM_ASSESS_OPTS.map((o) => (
                           <option key={o.value} value={o.value}>
@@ -325,16 +397,16 @@ function GapCategoryCard({
                         ))}
                       </select>
                     ) : null}
-                    {(displayPill || isAssessable) && (
+                    {!isAssessable && displayPill ? (
                       <span
                         className={[
                           'inline-flex rounded-[20px] border px-[8px] py-[2px] text-[9px] font-[800] uppercase tracking-[.05em]',
-                          pillUi(isAssessable && !assessed ? 'unass' : displayPill),
+                          pillUi(displayPill),
                         ].join(' ')}
                       >
-                        {pillText(isAssessable && !assessed ? 'unass' : displayPill)}
+                        {pillText(displayPill)}
                       </span>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               )
@@ -356,6 +428,7 @@ function GapCategoryCard({
                 onBudgetChange={onBudgetChange}
                 editing={budgetEditing}
                 onToggleEdit={onToggleBudgetEdit}
+                investCalc={investCalc}
               />
             </>
           ) : null}
@@ -373,9 +446,9 @@ export function Frame4() {
     selIndustry,
     selRole,
     gapPath,
-    setGapPath,
     setRPath,
     setEduBudgetLacs,
+    openPathDrawer,
   } = useAppState()
 
   const [itemAssess, setItemAssess] = useState({})
@@ -408,10 +481,10 @@ export function Frame4() {
 
   const roleTitleForGaps = (selRole || '').trim() || pdKey
 
-  useEffect(() => {
-    setGapPath(GAP_PATH)
-    setRPath(GAP_PATH)
-  }, [setGapPath, setRPath])
+  const { journey } = useMemo(
+    () => resolveUserJourney({ selRole, selIndustry, profile: s }),
+    [selRole, selIndustry, s],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -420,15 +493,14 @@ export function Frame4() {
     async function load() {
       setGapsLoading(true)
       const staticGaps = getStaticGapsForRole(title)
-      if (staticGaps) {
-        if (!cancelled) {
-          setGaps(staticGaps)
-          setGapsLoading(false)
-        }
-        return
+      const base = staticGaps || buildFallbackGaps(title, roleCard)
+      const next = {
+        ...base,
+        edu: buildEducationGapBlock(s, title, roleCard),
+        skill: buildSkillsGapBlock(s, title, roleCard),
+        exp: buildExperienceGapBlock(s, title, roleCard, journey),
+        dev: buildPersonalDevGapBlock(s, title, roleCard),
       }
-
-      const next = buildFallbackGaps(title, roleCard)
       if (!cancelled) {
         setGaps(next)
         setGapsLoading(false)
@@ -439,7 +511,7 @@ export function Frame4() {
     return () => {
       cancelled = true
     }
-  }, [roleTitleForGaps, industryLabel, roleCard])
+  }, [roleTitleForGaps, industryLabel, roleCard, journey, s.eduMax, s.edu, s.spec, s.func, s.dRole, s.role])
 
   /** Monthly salary in ₹ — profile stores it as monthly rupees (e.g. 24000) */
   const salaryMonthly = useMemo(() => {
@@ -449,15 +521,13 @@ export function Frame4() {
     return Number.isFinite(lpa) && lpa > 0 ? Math.round((lpa * 100000) / 12) : 20000
   }, [s.salary, s.dSalary])
 
-  /** Investment option costs derived from monthly salary — matching HTML prototype */
-  const investCalc = useMemo(() => {
-    const sal = salaryMonthly
-    const ftLump = Math.max(89000, Math.round(sal * 5))
-    const ftMonthly = Math.round(ftLump / 24)
-    const wsMonthly = Math.max(2500, Math.round(sal * 0.18))
-    const wsTotal = wsMonthly * 30
-    return { ftLump, ftMonthly, wsMonthly, wsTotal }
-  }, [salaryMonthly])
+  const investCalc = useMemo(
+    () =>
+      buildInvestmentCalc({
+        mba: shouldShowMbaInvestment(s, destinationTitle, roleCard),
+      }),
+    [s.eduMax, s.edu, s.spec, s.func, s.dRole, destinationTitle, roleCard],
+  )
 
   const suggestedMonthly = useMemo(
     () => Math.round((salaryMonthly * 0.18) / 100) * 100,
@@ -483,12 +553,12 @@ export function Frame4() {
   const goNext = () => {
     const lacs = Math.round(((monthlyBudget * 12) / 100000) * 10) / 10
     setEduBudgetLacs(lacs > 0 ? lacs : 0)
-    setRPath(GAP_PATH)
+    setRPath(gapPath)
     nav('/5')
   }
 
   const profilesN = roleCard?.dbProfiles != null ? formatCountIN(roleCard.dbProfiles) : '2,127'
-  const accelYrs = pd[GAP_PATH]?.yrs ?? pd.accel?.yrs
+  const accelYrs = pd.accel?.yrs
   const pathLabel = PATH_LABELS.find((p) => p.key === gapPath)?.label ?? 'Accelerated'
   const pathYearsToRole = pd[gapPath]?.yrs ?? pd.accel?.yrs ?? '—'
   const socialPct = 87
@@ -520,7 +590,7 @@ export function Frame4() {
           <button
             type="button"
             className="flex-shrink-0 rounded-[10px] border border-[rgba(250,249,244,.2)] bg-transparent px-[14px] py-[8px] text-[12px] font-[700] text-[#FAF9F4] transition hover:bg-[rgba(255,255,255,.08)]"
-            onClick={() => nav('/3')}
+            onClick={openPathDrawer}
           >
             View path →
           </button>

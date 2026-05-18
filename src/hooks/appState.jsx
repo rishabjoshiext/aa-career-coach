@@ -18,6 +18,11 @@ export function AppStateProvider({ children }) {
   const [eduBudgetLacs, setEduBudgetLacs] = useState(4.5)
   /** Incremented on resetSession so Frame1 remounts and drops local UI state. */
   const [sessionEpoch, setSessionEpoch] = useState(0)
+  /** Accelerated-path bottom sheet (Frames 4+) */
+  const [pathDrawerOpen, setPathDrawerOpen] = useState(false)
+
+  const openPathDrawer = useCallback(() => setPathDrawerOpen(true), [])
+  const closePathDrawer = useCallback(() => setPathDrawerOpen(false), [])
 
   const resetSession = useCallback(() => {
     resetDraft()
@@ -28,6 +33,7 @@ export function AppStateProvider({ children }) {
     setRPath('accel')
     setRYear(5)
     setEduBudgetLacs(4.5)
+    setPathDrawerOpen(false)
     setSessionEpoch((e) => e + 1)
   }, [resetDraft])
 
@@ -50,8 +56,25 @@ export function AppStateProvider({ children }) {
       setRYear,
       eduBudgetLacs,
       setEduBudgetLacs,
+      pathDrawerOpen,
+      openPathDrawer,
+      closePathDrawer,
     }),
-    [draft, resetSession, sessionEpoch, selIndustry, selRole, pathLoading, gapPath, rPath, rYear, eduBudgetLacs],
+    [
+      draft,
+      resetSession,
+      sessionEpoch,
+      selIndustry,
+      selRole,
+      pathLoading,
+      gapPath,
+      rPath,
+      rYear,
+      eduBudgetLacs,
+      pathDrawerOpen,
+      openPathDrawer,
+      closePathDrawer,
+    ],
   )
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

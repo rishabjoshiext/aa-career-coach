@@ -1,10 +1,31 @@
 /** Frame 7 “recommended specialisation” — deterministic fallbacks; degrees locked to approved online catalogue. */
 
+import { legacyEduFromMax } from '../data/frame1Education.js'
 import { buildFallbackOnlineCollegePicks } from './onlinePartnerUniversities.js'
 
 function parseGrowth(g) {
   const n = parseInt(String(g || '').replace(/[^\d]/g, ''), 10)
   return Number.isFinite(n) ? n : 32
+}
+
+/** 12th / diploma / ITI → bachelor's; graduate / PG → master's. */
+export function profileEduLevel(profile = {}) {
+  let eduMax = String(profile.eduMax || '').trim()
+  if (!eduMax && profile.edu) {
+    if (profile.edu === 'PG') eduMax = 'postgraduate'
+    else if (profile.edu === 'UG') eduMax = 'graduate'
+    else eduMax = '12_pass'
+  }
+  if (eduMax === 'graduate' || eduMax === 'postgraduate') return 'master'
+  return 'bachelor'
+}
+
+export function isBachelorDegree(degree) {
+  return /^Online B/i.test(String(degree || ''))
+}
+
+export function isMasterDegree(degree) {
+  return /^Online M/i.test(String(degree || ''))
 }
 
 function combinedHints(destinationTitle, card, profile) {
@@ -13,81 +34,130 @@ function combinedHints(destinationTitle, card, profile) {
   const spec = String(profile?.spec || '').toLowerCase()
   const func = String(profile?.func || '').toLowerCase()
   const dream = String(profile?.dRole || '').toLowerCase()
-  const edu = String(profile?.edu || '').trim()
-  return { raw: `${dest} ${desc} ${spec} ${func} ${dream}`, edu }
+  const eduMax = String(profile.eduMax || '').trim()
+  const edu = legacyEduFromMax(eduMax) || String(profile.edu || '').trim() || '12'
+  const eduLevel = profileEduLevel(profile)
+  return { raw: `${dest} ${desc} ${spec} ${func} ${dream}`, edu, eduLevel }
 }
 
-/**
- * Deterministic mapping to one allowed degree + track (no random / no out-of-catalogue names).
- */
-export function inferFallbackDegreeTrack(destinationTitle, card, profile = {}) {
-  const { raw, edu } = combinedHints(destinationTitle, card, profile)
-
-  if (/software|developer|engineer|devops|full[\s-]?stack|backend|frontend|sre|cloud\s*arch|\.net|java\s*dev|python\s*dev/.test(raw)) {
-    if (edu === '12') return { degree: 'Online BCA', specializationTrack: 'Software & IT Applications' }
-    if (edu === 'UG') return { degree: 'Online MCA', specializationTrack: 'Software Engineering & Systems' }
-    return { degree: 'Online MCA', specializationTrack: 'Advanced Computing & Cloud' }
+function downgradeToBachelor(pick, raw) {
+  const { specializationTrack } = pick
+  const t = String(specializationTrack || '').toLowerCase()
+  if (/software|developer|engineer|devops|cloud|programming|data\s*science|analytics|ai\b|ml\b/.test(raw)) {
+    if (/data|analytics|science/.test(t) || /data|analytics|science/.test(raw)) {
+      return { degree: 'Online BCA', specializationTrack: 'Data Analytics & Business Tools' }
+    }
+    return { degree: 'Online BCA', specializationTrack: 'Software & IT Applications' }
   }
+  if (/finance|account|audit|tax|commerce|banking|b\.?com/.test(raw)) {
+    return { degree: 'Online BCom', specializationTrack: 'Accounting & Corporate Taxation' }
+  }
+  if (/content|journalism|media|communication|english|history|sociology|psychology/.test(raw)) {
+    return { degree: 'Online BA', specializationTrack: 'Communication & Digital Media' }
+  }
+  if (/operation|supply|sales|market|hr|management/.test(raw)) {
+    return { degree: 'Online BBA', specializationTrack: pick.specializationTrack || 'General Management & Employability' }
+  }
+  return { degree: 'Online BBA', specializationTrack: 'General Management & Employability' }
+}
 
-  if (/data\s*science|machine\s*learning|\bml\b|ai\b|analytics|bi\b|business\s*analyst|data\s*analyst/.test(raw)) {
-    if (edu === '12') return { degree: 'Online BCA', specializationTrack: 'Data Analytics & Business Tools' }
+function upgradeToMaster(pick, raw) {
+  const t = String(pick.specializationTrack || '').toLowerCase()
+  if (/software|developer|engineer|devops|cloud|programming/.test(raw)) {
+    return { degree: 'Online MCA', specializationTrack: 'Software Engineering & Systems' }
+  }
+  if (/data\s*science|machine\s*learning|analytics|ai\b/.test(raw)) {
     return { degree: 'Online MCA', specializationTrack: 'Data Science & Intelligent Systems' }
   }
-
-  if (/finance|account|audit|tax|fp&a|controller|treasury|bookkeeping|ca\b|cfo/.test(raw)) {
-    if (/(assistant|executive|junior|clerk|accounts\s*payable)/.test(raw) && edu !== 'PG') {
-      return { degree: 'Online BCom', specializationTrack: 'Accounting & Corporate Taxation' }
+  if (/finance|account|audit|tax|commerce|banking|b\.?com/.test(raw)) {
+    if (/commerce|banking|mcom/.test(raw) || /commerce|banking/.test(t)) {
+      return { degree: 'Online MCom', specializationTrack: 'Commerce, Banking & Corporate Law' }
     }
     return { degree: 'Online MBA', specializationTrack: 'Finance & Accounting' }
   }
+  if (/content|journalism|media|communication|english|education|design/.test(raw)) {
+    return { degree: 'Online MA', specializationTrack: pick.specializationTrack || 'Communication & Digital Media' }
+  }
+  return { degree: 'Online MBA', specializationTrack: pick.specializationTrack || 'Management & Leadership' }
+}
 
-  if (/commerce|b\.?com|mcom|banking\s*operations|credit\s*analyst/.test(raw)) {
-    return { degree: 'Online MCom', specializationTrack: 'Commerce, Banking & Corporate Law' }
+function constrainDegreeLevel(pick, eduLevel, raw) {
+  if (eduLevel === 'bachelor' && isMasterDegree(pick.degree)) return downgradeToBachelor(pick, raw)
+  if (eduLevel === 'master' && isBachelorDegree(pick.degree)) return upgradeToMaster(pick, raw)
+  return pick
+}
+
+/**
+ * Role-aware degree + track, then constrained by profile:
+ * 12th / diploma / ITI → bachelor's only; UG / PG → master's only.
+ */
+export function inferFallbackDegreeTrack(destinationTitle, card, profile = {}) {
+  const { raw, eduLevel } = combinedHints(destinationTitle, card, profile)
+  const bachelor = eduLevel === 'bachelor'
+
+  let pick
+
+  if (/software|developer|engineer|devops|full[\s-]?stack|backend|frontend|sre|cloud\s*arch|\.net|java\s*dev|python\s*dev/.test(raw)) {
+    pick = bachelor
+      ? { degree: 'Online BCA', specializationTrack: 'Software & IT Applications' }
+      : { degree: 'Online MCA', specializationTrack: 'Software Engineering & Systems' }
+  } else if (/data\s*science|machine\s*learning|\bml\b|ai\b|analytics|bi\b|business\s*analyst|data\s*analyst/.test(raw)) {
+    pick = bachelor
+      ? { degree: 'Online BCA', specializationTrack: 'Data Analytics & Business Tools' }
+      : { degree: 'Online MCA', specializationTrack: 'Data Science & Intelligent Systems' }
+  } else if (/finance|account|audit|tax|fp&a|controller|treasury|bookkeeping|ca\b|cfo/.test(raw)) {
+    if (/(assistant|executive|junior|clerk|accounts\s*payable)/.test(raw) && bachelor) {
+      pick = { degree: 'Online BCom', specializationTrack: 'Accounting & Corporate Taxation' }
+    } else {
+      pick = bachelor
+        ? { degree: 'Online BCom', specializationTrack: 'Accounting & Finance' }
+        : { degree: 'Online MBA', specializationTrack: 'Finance & Accounting' }
+    }
+  } else if (/commerce|b\.?com|mcom|banking\s*operations|credit\s*analyst/.test(raw)) {
+    pick = bachelor
+      ? { degree: 'Online BCom', specializationTrack: 'Accounting & Finance' }
+      : { degree: 'Online MCom', specializationTrack: 'Commerce, Banking & Corporate Law' }
+  } else if (/hr\b|human\s*resource|people\s*partner|talent|recruit|l&d|payroll/.test(raw)) {
+    pick = bachelor
+      ? { degree: 'Online BBA', specializationTrack: 'Human Resource Management' }
+      : { degree: 'Online MBA', specializationTrack: 'HR & Organisational Development' }
+  } else if (/market|brand|growth|performance|seo|content\s*strateg|digital\s*media|social\s*media|advert/.test(raw)) {
+    pick = bachelor
+      ? { degree: 'Online BBA', specializationTrack: 'Marketing & Brand Strategy' }
+      : { degree: 'Online MBA', specializationTrack: 'Marketing & Brand Strategy' }
+  } else if (/product\s*manager|\bpm\b|program\s*management|roadmap|discovery/.test(raw)) {
+    pick = bachelor
+      ? { degree: 'Online BBA', specializationTrack: 'General Management & Employability' }
+      : { degree: 'Online MBA', specializationTrack: 'Strategy & Product Leadership' }
+  } else if (/operations|supply\s*chain|logistics|procurement|warehouse/.test(raw)) {
+    pick = bachelor
+      ? { degree: 'Online BBA', specializationTrack: 'Operations & Supply Chain' }
+      : { degree: 'Online MBA', specializationTrack: 'Operations Management' }
+  } else if (/sales|business\s*development|\bbd\b|account\s*manager|revenue/.test(raw)) {
+    pick = { degree: 'Online BBA', specializationTrack: 'Sales & Business Development' }
+  } else if (/content|journalism|media|communication|pr\b|copywriter|editor/.test(raw)) {
+    pick = bachelor
+      ? { degree: 'Online BA', specializationTrack: 'Communication & Digital Media' }
+      : { degree: 'Online MA', specializationTrack: 'Communication & Digital Media' }
+  } else if (/teacher|education|academic|instructional/.test(raw)) {
+    pick = bachelor
+      ? { degree: 'Online BA', specializationTrack: 'Education Studies & Pedagogy' }
+      : { degree: 'Online MA', specializationTrack: 'Education Studies & Pedagogy' }
+  } else if (/design|ux\b|ui\b|graphic|visual/.test(raw)) {
+    pick = bachelor
+      ? { degree: 'Online BA', specializationTrack: 'Design & User Research' }
+      : { degree: 'Online MA', specializationTrack: 'Design & User Research' }
+  } else if (/legal|compliance|company\s*secretary|regulatory/.test(raw)) {
+    pick = bachelor
+      ? { degree: 'Online BBA', specializationTrack: 'Business Law & Compliance' }
+      : { degree: 'Online MBA', specializationTrack: 'Business Law & Compliance' }
+  } else if (bachelor) {
+    pick = { degree: 'Online BBA', specializationTrack: 'General Management & Employability' }
+  } else {
+    pick = { degree: 'Online MBA', specializationTrack: 'Management & Leadership' }
   }
 
-  if (/hr\b|human\s*resource|people\s*partner|talent|recruit|l&d|payroll/.test(raw)) {
-    return { degree: 'Online MBA', specializationTrack: 'HR & Organisational Development' }
-  }
-
-  if (/market|brand|growth|performance|seo|content\s*strateg|digital\s*media|social\s*media|advert/.test(raw)) {
-    return { degree: 'Online MBA', specializationTrack: 'Marketing & Brand Strategy' }
-  }
-
-  if (/product\s*manager|\bpm\b|program\s*management|roadmap|discovery/.test(raw)) {
-    return { degree: 'Online MBA', specializationTrack: 'Strategy & Product Leadership' }
-  }
-
-  if (/operations|supply\s*chain|logistics|procurement|warehouse/.test(raw)) {
-    return { degree: 'Online BBA', specializationTrack: 'Operations & Supply Chain' }
-  }
-
-  if (/sales|business\s*development|\bbd\b|account\s*manager|revenue/.test(raw)) {
-    return { degree: 'Online BBA', specializationTrack: 'Sales & Business Development' }
-  }
-
-  if (/content|journalism|media|communication|pr\b|copywriter|editor/.test(raw)) {
-    return { degree: 'Online MA', specializationTrack: 'Communication & Digital Media' }
-  }
-
-  if (/teacher|education|academic|instructional/.test(raw)) {
-    return { degree: 'Online MA', specializationTrack: 'Education Studies & Pedagogy' }
-  }
-
-  if (/design|ux\b|ui\b|graphic|visual/.test(raw)) {
-    return { degree: 'Online MA', specializationTrack: 'Design & User Research' }
-  }
-
-  if (/legal|compliance|company\s*secretary|regulatory/.test(raw)) {
-    return { degree: 'Online MBA', specializationTrack: 'Business Law & Compliance' }
-  }
-
-  if (edu === '12') {
-    return { degree: 'Online BBA', specializationTrack: 'General Management & Employability' }
-  }
-  if (edu === 'UG') {
-    return { degree: 'Online MBA', specializationTrack: 'Management & Leadership' }
-  }
-  return { degree: 'Online MBA', specializationTrack: 'Executive Management & Strategy' }
+  return constrainDegreeLevel(pick, eduLevel, raw)
 }
 
 function curriculumForDegree(degree, track) {

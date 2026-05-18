@@ -1,4 +1,4 @@
-import { PATH_GROWTH, STAGNATION_RATE } from './roiData.js'
+import { PATH_GROWTH, STAGNATION_RATE, pathInvestmentLacs } from './roiData.js'
 import { formatRupeeMonthly } from './formatINR.js'
 
 const HORIZON = 10
@@ -41,15 +41,17 @@ export function cumulativeExtraLacs(stagK, pathK, yEnd) {
   return Math.max(0, Math.round(sum * 10) / 10)
 }
 
-/** First year 1..20 where cumulative extra >= budgetLacs */
-export function breakEvenYear(stagK, pathK, budgetLacs) {
-  const b = Number(budgetLacs) || 0
+/** First year 1..HORIZON where cumulative extra >= path-adjusted investment */
+export function breakEvenYear(stagK, pathK, budgetLacs, pathKey = 'fast') {
+  const b = pathInvestmentLacs(pathKey, budgetLacs)
   if (b <= 0) return null
   for (let y = 1; y <= HORIZON; y += 1) {
     if (cumulativeExtraLacs(stagK, pathK, y) >= b) return y
   }
   return null
 }
+
+export { pathInvestmentLacs }
 
 /** Chart x-axis year indices to show (includes 0 and rYear) */
 export function chartYearTicks(rYear) {

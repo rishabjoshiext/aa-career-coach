@@ -109,6 +109,15 @@ body {
   }
 }
 
+@keyframes mpSlideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
 @keyframes float {
   0%,
   100% {

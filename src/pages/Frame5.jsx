@@ -12,13 +12,20 @@ import {
   chartYearTicks,
   cumulativeExtraLacs,
   fmtRupeeMoK,
+  pathInvestmentLacs,
 } from '../utils/roiModel.js'
 import { formatBudgetLacs } from '../utils/formatINR.js'
 
 const PATH_TABS = [
-  { key: 'accel', label: 'Accelerated', emoji: '🚀', hint: 'Fastest promotion cadence' },
-  { key: 'fast', label: 'Fast Track', emoji: '⚡', hint: 'Balanced speed & safety' },
-  { key: 'trad', label: 'Traditional', emoji: '📈', hint: 'Steady, proven ladder' },
+  { key: 'accel', label: 'Accelerated', emoji: '🚀', hint: 'Lowest upskilling spend · highest salary lift' },
+  { key: 'fast', label: 'Fast Track', emoji: '⚡', hint: 'Moderate investment · balanced returns' },
+  { key: 'trad', label: 'Traditional', emoji: '📈', hint: 'Highest investment · slowest salary growth' },
+]
+
+const PATH_COMPARE = [
+  { key: 'accel', label: 'Accelerated', color: '#48DB85' },
+  { key: 'fast', label: 'Fast Track', color: '#FFD700' },
+  { key: 'trad', label: 'Traditional', color: '#888' },
 ]
 
 const BRAND_PURPLE = '#6320EE'
@@ -30,10 +37,12 @@ function fmtLacs(n) {
 
 export function Frame5() {
   const nav = useNavigate()
-  const { s, selIndustry, selRole, rPath, setRPath, rYear, setRYear, eduBudgetLacs } = useAppState()
+  const { s, selIndustry, selRole, rPath, setRPath, rYear, setRYear, eduBudgetLacs, openPathDrawer } =
+    useAppState()
 
   const [roiModel, setRoiModel] = useState(null)
   const [roiLoading, setRoiLoading] = useState(true)
+  const [hoverYear, setHoverYear] = useState(null)
 
   const pdKey = resolvePdRole(selRole)
   const destinationTitle = (selRole && String(selRole).trim()) || 'your goal'
@@ -100,7 +109,20 @@ export function Frame5() {
 
   const totalExtra = stag && pathSeries ? cumulativeExtraLacs(stag, pathSeries, rYear) : 0
   const bankApprox = Math.round(totalExtra * 0.35 * 10) / 10
-  const beYear = stag && pathSeries ? breakEvenYear(stag, pathSeries, eduBudgetLacs) : null
+  const pathInvest = pathInvestmentLacs(rPath, eduBudgetLacs)
+  const beYear = stag && pathSeries ? breakEvenYear(stag, pathSeries, eduBudgetLacs, rPath) : null
+
+  const pathCompareAtHorizon = useMemo(() => {
+    if (!roiModel?.stagMonthlyK || !roiModel?.pathMonthlyK) return []
+    const stagK = roiModel.stagMonthlyK
+    return PATH_COMPARE.map((p) => {
+      const series = roiModel.pathMonthlyK[p.key]
+      const salaryK = series?.[rYear] ?? 0
+      const invest = pathInvestmentLacs(p.key, eduBudgetLacs)
+      const extra = cumulativeExtraLacs(stagK, series, rYear)
+      return { ...p, salaryK, invest, extra }
+    })
+  }, [roiModel, rYear, eduBudgetLacs])
 
   const totalExtraSub =
     cardCopy?.totalExtraSub?.trim() ||
@@ -112,8 +134,8 @@ export function Frame5() {
 
   const breakEvenSub =
     cardCopy?.breakEvenSub?.trim() ||
-    (Number(eduBudgetLacs) > 0
-      ? `When cumulative extra earnings surpass your ₹${eduBudgetLacs}L education budget.`
+    (pathInvest > 0
+      ? `When cumulative extra earnings surpass ~₹${pathInvest}L upskilling on the ${pathLabel} path.`
       : 'When extra earnings surpass a typical upskilling investment for this move.')
 
   return (
@@ -143,7 +165,7 @@ export function Frame5() {
           <button
             type="button"
             className="flex-shrink-0 rounded-[10px] border border-[rgba(250,249,244,.2)] bg-transparent px-[14px] py-[8px] text-[12px] font-[700] text-[#FAF9F4] transition hover:bg-[rgba(255,255,255,.08)]"
-            onClick={() => nav('/3')}
+            onClick={openPathDrawer}
           >
             View path →
           </button>
@@ -227,41 +249,105 @@ export function Frame5() {
           </div>
 
           {!roiLoading && stag && pathSeries ? (
-            <div className="flex items-end justify-between gap-[6px] sm:gap-[12px]" style={{ minHeight: chartH + 52 }}>
-              {ticks.map((yr) => {
-                const hS = Math.round((stag[yr] / chartMaxK) * chartH)
-                const hP = Math.round((pathSeries[yr] / chartMaxK) * chartH)
-                const isHorizon = yr === rYear
-                return (
-                  <div key={`col-${yr}`} className="flex min-w-0 flex-1 flex-col items-center">
-                    <div className="mb-1 flex w-full justify-center gap-[4px] text-[10px] font-[800] sm:text-[11px]">
-                      <span className="text-[#737373]">{fmtRupeeMoK(stag[yr])}</span>
-                      <span className="text-[#ccc]">/</span>
-                      <span style={{ color: BRAND_PURPLE }}>{fmtRupeeMoK(pathSeries[yr])}</span>
-                    </div>
-                    <div className="flex h-[184px] w-full items-end justify-center gap-[5px]">
-                      <div
-                        className="w-[38%] max-w-[44px] rounded-t-[8px] bg-[linear-gradient(180deg,#e5e5e5,#bdbdbd)] sm:max-w-[52px]"
-                        style={{ height: `${Math.max(8, hS)}px` }}
-                        title={`No action: ${fmtRupeeMoK(stag[yr])}`}
-                      />
+            <>
+              <div className="flex items-end justify-between gap-[6px] sm:gap-[12px]" style={{ minHeight: chartH + 52 }}>
+                {ticks.map((yr) => {
+                  const hS = Math.round((stag[yr] / chartMaxK) * chartH)
+                  const hP = Math.round((pathSeries[yr] / chartMaxK) * chartH)
+                  const isHorizon = yr === rYear
+                  const isHover = hoverYear === yr
+                  const moDelta = Math.max(0, Math.round(pathSeries[yr] - stag[yr]))
+                  return (
+                    <div
+                      key={`col-${yr}`}
+                      className={[
+                        'group/col flex min-w-0 flex-1 cursor-pointer flex-col items-center rounded-[12px] px-1 pb-1 pt-2 transition-all duration-200',
+                        isHover ? 'bg-[rgba(99,32,238,.07)] -translate-y-0.5' : 'hover:bg-[rgba(99,32,238,.05)]',
+                      ].join(' ')}
+                      onMouseEnter={() => setHoverYear(yr)}
+                      onMouseLeave={() => setHoverYear(null)}
+                    >
                       <div
                         className={[
-                          'w-[38%] max-w-[44px] rounded-t-[8px] bg-[linear-gradient(180deg,#6320EE,#37017B)] sm:max-w-[52px]',
-                          isHorizon ? 'shadow-[0_0_20px_rgba(99,32,238,.45)] ring-2 ring-[rgba(250,204,21,.75)]' : 'shadow-[0_8px_22px_rgba(99,32,238,.22)]',
+                          'mb-1 flex w-full justify-center gap-[4px] text-[10px] font-[800] transition-transform duration-200 sm:text-[11px]',
+                          isHover ? 'scale-[1.03]' : '',
                         ].join(' ')}
-                        style={{ height: `${Math.max(8, hP)}px` }}
-                        title={`Your path: ${fmtRupeeMoK(pathSeries[yr])}`}
-                      />
+                      >
+                        <span className="text-[#737373]">{fmtRupeeMoK(stag[yr])}</span>
+                        <span className="text-[#ccc]">/</span>
+                        <span style={{ color: BRAND_PURPLE }}>{fmtRupeeMoK(pathSeries[yr])}</span>
+                      </div>
+                      {isHover && moDelta > 0 ? (
+                        <div className="mb-1 rounded-[6px] bg-[rgba(99,32,238,.1)] px-2 py-0.5 text-[9px] font-[800] text-[#6320EE]">
+                          +{fmtRupeeMoK(moDelta)} vs no action
+                        </div>
+                      ) : (
+                        <div className="mb-1 h-[18px]" aria-hidden />
+                      )}
+                      <div className="flex h-[184px] w-full items-end justify-center gap-[5px]">
+                        <div
+                          className={[
+                            'w-[38%] max-w-[44px] origin-bottom rounded-t-[8px] bg-[linear-gradient(180deg,#e5e5e5,#bdbdbd)] transition-all duration-200 sm:max-w-[52px]',
+                            isHover ? 'scale-y-[1.04] opacity-90' : 'group-hover/col:opacity-85',
+                          ].join(' ')}
+                          style={{ height: `${Math.max(8, hS)}px` }}
+                          title={`No action: ${fmtRupeeMoK(stag[yr])}`}
+                        />
+                        <div
+                          className={[
+                            'w-[38%] max-w-[44px] origin-bottom rounded-t-[8px] bg-[linear-gradient(180deg,#6320EE,#37017B)] transition-all duration-200 sm:max-w-[52px]',
+                            isHorizon
+                              ? 'shadow-[0_0_20px_rgba(99,32,238,.45)] ring-2 ring-[rgba(250,204,21,.75)]'
+                              : isHover
+                                ? 'scale-y-[1.06] shadow-[0_12px_28px_rgba(99,32,238,.38)]'
+                                : 'shadow-[0_8px_22px_rgba(99,32,238,.22)] group-hover/col:shadow-[0_10px_26px_rgba(99,32,238,.3)]',
+                          ].join(' ')}
+                          style={{ height: `${Math.max(8, hP)}px` }}
+                          title={`Your path: ${fmtRupeeMoK(pathSeries[yr])}`}
+                        />
+                      </div>
+                      <div
+                        className={[
+                          'mt-2 flex items-center gap-1 text-[11px] font-[800] transition-colors duration-200',
+                          isHover || isHorizon ? 'text-[#6320EE]' : 'text-[#555]',
+                        ].join(' ')}
+                      >
+                        {yr === 0 ? 'Now' : `Yr ${yr}`}
+                        {isHorizon ? <span className="text-[12px] leading-none text-[#eab308]">★</span> : null}
+                      </div>
                     </div>
-                    <div className="mt-2 flex items-center gap-1 text-[11px] font-[800] text-[#555]">
-                      {yr === 0 ? 'Now' : `Yr ${yr}`}
-                      {isHorizon ? <span className="text-[12px] leading-none text-[#eab308]">★</span> : null}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+              </div>
+
+              <div className="mt-5 grid gap-2 border-t border-[rgba(0,0,0,.06)] pt-4 sm:grid-cols-3">
+                {pathCompareAtHorizon.map((row) => {
+                  const active = row.key === rPath
+                  return (
+                    <button
+                      key={row.key}
+                      type="button"
+                      onClick={() => setRPath(row.key)}
+                      className={[
+                        'rounded-[11px] border px-3 py-2.5 text-left transition-all duration-200',
+                        active
+                          ? 'border-[rgba(99,32,238,.35)] bg-[rgba(99,32,238,.06)] shadow-[0_4px_14px_rgba(99,32,238,.12)]'
+                          : 'border-[rgba(0,0,0,.07)] bg-[#fafafa] hover:border-[rgba(99,32,238,.25)] hover:bg-white hover:shadow-[0_4px_12px_rgba(0,0,0,.06)]',
+                      ].join(' ')}
+                    >
+                      <div className="mb-1 flex items-center gap-1.5 text-[11px] font-[800]" style={{ color: row.color }}>
+                        <span className="inline-block h-2 w-2 rounded-full" style={{ background: row.color }} />
+                        {row.label}
+                      </div>
+                      <div className="text-[13px] font-[800] text-[#0C0C0C]">{fmtRupeeMoK(row.salaryK)}</div>
+                      <div className="mt-0.5 text-[10px] font-[600] text-[#888]">
+                        ~₹{row.invest}L invest · +{fmtLacs(row.extra)} extra by yr {rYear}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </>
           ) : (
             <div className="flex h-[240px] items-center justify-center text-[13px] font-[600] text-[#aaa]">
               Loading salary curves…
@@ -277,14 +363,14 @@ export function Frame5() {
             </div>
             <div className="mb-2 text-[9px] font-[800] uppercase tracking-[.12em] text-[#888]">Your salary by year {rYear}</div>
             <div className="text-[26px] font-[800] leading-none text-[#0C0C0C] [font-family:'DM Serif Display',serif]">
-              {fmtRupeeMoK(salaryPathEnd)}/mo
+              {fmtRupeeMoK(salaryPathEnd)}
             </div>
             <p className="mt-3 text-[11.5px] leading-[1.45] text-[#666]">
-              vs {fmtRupeeMoK(salaryStagEnd)}/mo with no action
+              vs {fmtRupeeMoK(salaryStagEnd)} with no action
               {moDiff > 0 ? (
                 <>
                   {' '}
-                  — a {fmtRupeeMoK(moDiff)}/mo difference
+                  — a {fmtRupeeMoK(moDiff)} difference
                 </>
               ) : null}
               .

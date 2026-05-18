@@ -182,10 +182,15 @@ export function Frame1WorkSection({ s, setS }) {
         ].join(' ')}
       >
         <div className={hasWork ? 'min-h-0 overflow-visible' : 'min-h-0 overflow-hidden'}>
-          <div className="mt-3 space-y-4 rounded-[11px] border border-[rgba(0,0,0,.07)] bg-[rgba(255,255,255,.55)] px-[13px] pb-[14px] pt-[12px]">
-            <div>
-              <div className="mb-[2px] text-[13px] font-[800] text-[#0C0C0C]">Total years of experience</div>
-              <div className="mb-2 text-[11px] text-[#888]">Sum all the experiences from your previous jobs.</div>
+          <div className="mt-3 flex flex-col gap-3">
+            {/* Separate card: tenure only */}
+            <div className="rounded-[11px] border border-[rgba(0,0,0,.07)] bg-white px-[13px] py-[13px]">
+              <div className="mb-[2px] text-[13px] font-[800] text-[#0C0C0C]">
+                Total years of experience
+              </div>
+              <div className="mb-3 text-[11px] text-[#888]">
+                Sum all the experiences from your previous jobs.
+              </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <Label required>Years</Label>
@@ -218,6 +223,8 @@ export function Frame1WorkSection({ s, setS }) {
               </div>
             </div>
 
+            {/* Separate card: current role */}
+            <div className="space-y-4 rounded-[11px] border border-[rgba(0,0,0,.07)] bg-white px-[13px] py-[13px]">
             <div ref={coWrap} className="relative">
               <Label required>Current / recent company</Label>
               <div
@@ -390,6 +397,7 @@ export function Frame1WorkSection({ s, setS }) {
                 inputMode="numeric"
                 className="mt-1"
               />
+            </div>
             </div>
           </div>
         </div>

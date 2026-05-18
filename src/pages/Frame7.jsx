@@ -166,20 +166,11 @@ export function Frame7() {
                 <div className="mt-1 text-[11px] font-[500] leading-snug text-[#777]">{profileEducationLine(s)}</div>
                 {s.ind ? <div className="mt-0.5 text-[10px] font-[500] text-[#999]">Industry: {s.ind}</div> : null}
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {s.spec ? (
-                    <span className="rounded-[4px] border border-[rgba(55,1,123,.14)] bg-[rgba(55,1,123,.07)] px-2 py-0.5 text-[8.5px] font-[800] uppercase tracking-[.06em] text-[#37017B]">
-                      {s.spec}
-                    </span>
-                  ) : (
-                    <span
-                      className="rounded-[4px] border border-[rgba(0,0,0,.08)] bg-[rgba(0,0,0,.04)] px-2 py-0.5 text-[11px] font-[700] text-[#999]"
-                      title="Add specialisation in profile"
-                    >
-                      —
-                    </span>
-                  )}
+                  <span className="rounded-[4px] border border-[rgba(72,219,133,.35)] bg-[rgba(72,219,133,.14)] px-2 py-0.5 text-[8.5px] font-[800] uppercase tracking-[.06em] text-[#15803d]">
+                    ELIGIBLE
+                  </span>
                   <span className="rounded-[4px] border border-[rgba(72,219,133,.22)] bg-[rgba(72,219,133,.1)] px-2 py-0.5 text-[8.5px] font-[800] uppercase tracking-[.06em] text-[#15803d]">
-                    {studyModePill(s)}
+                    {studyModePill(s) === 'MODE OPEN' ? 'WORK + STUDY' : studyModePill(s)}
                   </span>
                 </div>
               </div>
