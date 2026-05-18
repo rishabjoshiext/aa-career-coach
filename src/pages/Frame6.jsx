@@ -1,16 +1,51 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button.jsx'
 import { useAppState } from '../hooks/appState.jsx'
 import { resolvePdRole } from '../utils/roleKey.js'
-import { flattenIndustryRoles, INDUSTRIES } from '../utils/fasttrackData.js'
+import { flattenIndustryRoles } from '../utils/fasttrackData.js'
 import { PD } from '../utils/pathData.js'
 import {
   buildFallbackStories,
-  conservativeHikePct,
-  conservativePlacedPct,
   liveReviewersCount,
+  PLATFORM_METRICS,
 } from '../utils/socialStoriesData.js'
+
+function MetricIcon({ type }) {
+  const stroke = '#5B6FE8'
+  const common = { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke, strokeWidth: 1.75, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true }
+  if (type === 'learners') {
+    return (
+      <svg {...common}>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    )
+  }
+  if (type === 'degree') {
+    return (
+      <svg {...common}>
+        <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
+        <path d="M6 12v5c0 1.1 2.7 2 6 2s6-.9 6-2v-5" />
+      </svg>
+    )
+  }
+  if (type === 'satisfaction') {
+    return (
+      <svg {...common}>
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        <path d="m9 12 2 2 4-4" />
+      </svg>
+    )
+  }
+  return (
+    <svg {...common}>
+      <path d="M3 3v18h18" />
+      <path d="m19 9-5 5-4-4-3 3" />
+    </svg>
+  )
+}
 
 const PATH_LABELS = [
   { key: 'accel', label: 'Accelerated' },
@@ -21,8 +56,6 @@ const PATH_LABELS = [
 export function Frame6() {
   const nav = useNavigate()
   const { s, selIndustry, selRole, gapPath, openPathDrawer } = useAppState()
-  const [stories, setStories] = useState([])
-  const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
 
   const pdKey = resolvePdRole(selRole)
@@ -31,52 +64,18 @@ export function Frame6() {
   const pathLabel = PATH_LABELS.find((p) => p.key === gapPath)?.label ?? 'Accelerated'
   const pathYears = pd[gapPath]?.yrs ?? pd.accel?.yrs ?? '—'
 
-  const industryLabel = useMemo(() => {
-    const row = INDUSTRIES.find((i) => i.id === selIndustry)
-    return row?.n || 'All Functions'
-  }, [selIndustry])
-
   const roleCard = useMemo(() => {
     const flat = flattenIndustryRoles(selIndustry === 'all' ? 'all' : selIndustry)
     const t = (selRole || '').trim()
     return flat.find((c) => c.role === t) || flat.find((c) => c.role === pdKey) || flat[0]
   }, [selRole, selIndustry, pdKey])
 
-  const roleTitle = (selRole || '').trim() || pdKey
+  const stories = useMemo(() => buildFallbackStories(destinationTitle), [destinationTitle])
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true)
-      const list = buildFallbackStories(destinationTitle)
-      if (!cancelled) {
-        setStories(list)
-        setLoading(false)
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [roleTitle, industryLabel, roleCard, destinationTitle])
-
-  const stats = useMemo(() => {
-    const hike = conservativeHikePct(roleCard, destinationTitle)
-    const placed = conservativePlacedPct(destinationTitle)
-    const reviewers = liveReviewersCount(roleCard, destinationTitle)
-    const db = roleCard?.dbProfiles
-    const dbStr = typeof db === 'number' ? db.toLocaleString('en-IN') : '2,100+'
-    return {
-      hike,
-      jobs: roleCard?.jobs || '—',
-      placed,
-      reviewers,
-      dbStr,
-    }
-  }, [roleCard, destinationTitle])
-
-  const displayName = (s.name || '').trim()
-  const headingEm = displayName || 'professionals like you'
+  const liveStats = useMemo(
+    () => ({ reviewers: liveReviewersCount(roleCard, destinationTitle) }),
+    [roleCard, destinationTitle],
+  )
 
   return (
     <section className="absolute inset-0 overflow-y-auto px-9 pb-10 pt-7" data-app-page-scroll>
@@ -106,59 +105,45 @@ export function Frame6() {
         </button>
 
         <div className="mb-2 text-[27px] leading-[1.2] [font-family:'DM Serif Display',serif]">
-          People exactly <em className="text-[#37017B] not-italic">{headingEm}</em> — before and after.
+        Career Growth stories that feel<strong> Familiar.</strong> 
         </div>
         <p className="mb-6 max-w-[720px] text-[13px] leading-[1.55] text-[#555]">
-          Same background. Same starting salary band. They chose a structured path toward{' '}
-          <strong className="text-[#0C0C0C]">{destinationTitle}</strong>.
+        Professionals with backgrounds like <strong>yours</strong> who chose a structured path and achieved meaningful career growth. {' '} <br></br>
+          <strong className="text-[#0C0C0C]">{destinationTitle}</strong> careers.
         </p>
 
-        {/* 4 dark stat tiles */}
+        {/* Platform metrics — light cards */}
         <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <div className="rounded-[12px] border border-[rgba(255,255,255,.07)] bg-[linear-gradient(135deg,#0C0C0C,#111)] px-4 py-3.5 text-center">
-            <div className="[font-family:'DM Serif Display',serif] text-[26px] leading-none text-[#48DB85]">+{stats.hike}%</div>
-            <div className="mt-2 text-[11px] font-[600] leading-snug text-[rgba(250,249,244,.45)]">
-              Median salary uplift after structured path
+          {PLATFORM_METRICS.map((metric) => (
+            <div
+              key={metric.label}
+              className="rounded-[14px] border border-[rgba(15,23,42,.06)] bg-white px-4 py-4 text-left shadow-[0_4px_18px_rgba(15,23,42,.06)]"
+            >
+              <div className="mb-3 flex h-[36px] w-[36px] items-center justify-center rounded-[10px] bg-[rgba(91,111,232,.1)]">
+                <MetricIcon type={metric.icon} />
+              </div>
+              <div className="[font-family:'DM Serif Display',serif] text-[28px] leading-none text-[#1E293B]">
+                {metric.value}
+              </div>
+              <div className="mt-2 text-[12px] font-[500] leading-snug text-[#64748B]">{metric.label}</div>
             </div>
-          </div>
-          <div className="rounded-[12px] border border-[rgba(255,255,255,.07)] bg-[linear-gradient(135deg,#0C0C0C,#111)] px-4 py-3.5 text-center">
-            <div className="[font-family:'DM Serif Display',serif] text-[26px] leading-none text-[#48DB85]">{stats.jobs}</div>
-            <div className="mt-2 text-[11px] font-[600] leading-snug text-[rgba(250,249,244,.45)]">
-              Open {destinationTitle} roles · India (aggregated listings)
-            </div>
-          </div>
-          <div className="rounded-[12px] border border-[rgba(255,255,255,.07)] bg-[linear-gradient(135deg,#0C0C0C,#111)] px-4 py-3.5 text-center">
-            <div className="[font-family:'DM Serif Display',serif] text-[26px] leading-none text-[#48DB85]">4.6★</div>
-            <div className="mt-2 text-[11px] font-[600] leading-snug text-[rgba(250,249,244,.45)]">Session satisfaction (rolling)</div>
-          </div>
-          <div className="rounded-[12px] border border-[rgba(255,255,255,.07)] bg-[linear-gradient(135deg,#0C0C0C,#111)] px-4 py-3.5 text-center">
-            <div className="[font-family:'DM Serif Display',serif] text-[26px] leading-none text-[#48DB85]">{stats.placed}%</div>
-            <div className="mt-2 text-[11px] font-[600] leading-snug text-[rgba(250,249,244,.45)]">
-              Reported offer or promotion within 9 months
-            </div>
-          </div>
+          ))}
         </div>
 
         {/* Live pill */}
         <div className="mb-5 inline-flex max-w-full items-center gap-2 rounded-[20px] border border-[rgba(0,0,0,.07)] bg-[rgba(0,0,0,.03)] px-[13px] py-[6px]">
           <span className="h-[6px] w-[6px] flex-shrink-0 animate-pulse rounded-full bg-[#22c55e]" />
           <p className="text-[11px] font-[600] leading-snug text-[#555]">
-            <strong className="text-[#0C0C0C]">{stats.dbStr}</strong> profiles in our sample moved toward roles like{' '}
+            <strong className="text-[#0C0C0C]">1L+</strong> learners coached toward roles like{' '}
             <strong className="text-[#37017B]">{destinationTitle}</strong>
             <span className="text-[#999]"> · </span>
-            <span className="text-[#666]">{stats.reviewers.toLocaleString('en-IN')} peers reviewing paths this week</span>
+            <span className="text-[#666]">{liveStats.reviewers.toLocaleString('en-IN')} peers reviewing paths this week</span>
           </p>
         </div>
 
         {/* Story grid */}
         <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {(loading ? Array.from({ length: 8 }) : stories).map((story, idx) =>
-            loading ? (
-              <div
-                key={`sk-${idx}`}
-                className="h-[220px] animate-pulse rounded-[15px] border border-[rgba(0,0,0,.06)] bg-[rgba(0,0,0,.03)]"
-              />
-            ) : (
+          {stories.map((story, idx) => (
               <article
                 key={`${story.n}-${idx}`}
                 className={[
@@ -201,8 +186,7 @@ export function Frame6() {
                   See journey snapshot
                 </button>
               </article>
-            ),
-          )}
+          ))}
         </div>
 
         <div className="mt-2 rounded-[13px] border border-[rgba(55,1,123,.12)] bg-[rgba(55,1,123,.04)] px-[18px] py-[14px]">
