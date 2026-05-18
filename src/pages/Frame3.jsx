@@ -19,6 +19,7 @@ import {
   applyTimelineToJourney,
   buildTimelineYearTicks,
   milestoneCentersForPath,
+  accelCentersThreeBox,
 } from '../journey/timelineLayout.js'
 import { JOB_LISTINGS, logoKey } from '../utils/jobsData.js'
 import { JobDetailModal } from '../components/modals/JobDetailModal.jsx'
@@ -150,16 +151,18 @@ export function Frame3() {
       pathEndX('fast'),
     )
     const accelEndX = pathEndX('accel')
+    const accelNatural = milestoneCentersForPath(
+      d.nodes.accel,
+      xForYear,
+      200,
+      PATH_MIN_FIRST_CENTER.accel,
+      accelEndX,
+    )
+    const accelFirst = fastCenters[0] ?? accelNatural[0] ?? PATH_MIN_FIRST_CENTER.accel
     const accelCenters =
-      fastCenters.length >= 2 && d.nodes.accel.length === 3
-        ? [fastCenters[0], fastCenters[1], accelEndX]
-        : milestoneCentersForPath(
-            d.nodes.accel,
-            xForYear,
-            200,
-            PATH_MIN_FIRST_CENTER.accel,
-            accelEndX,
-          )
+      d.nodes.accel.length === 3
+        ? accelCentersThreeBox(accelFirst, accelEndX)
+        : accelNatural
     const centersByPath = {
       trad: milestoneCentersForPath(
         d.nodes.trad,

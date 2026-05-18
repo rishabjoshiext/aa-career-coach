@@ -1,6 +1,7 @@
 /**
- * Hardcoded employers, industries, and role titles for Frame 1 work experience (search / dropdowns).
+ * Employers, industries, and role titles for Frame 1 work experience (search / dropdowns).
  */
+import { companyNames } from './companies.js'
 import { ROLES_BY_FUNCTIONAL_AREA, ROLE_OTHER } from './rolesByFunctionalArea.js'
 
 const EXTRA_ROLES = [
@@ -135,154 +136,25 @@ const EXTRA_ROLES = [
   'Excel Reporting Assistant',
 ]
 
-/** @type {string[]} */
-export const WORK_EMPLOYERS = [
-  ...new Set([
-    'Google',
-    'Microsoft',
-    'Amazon',
-    'Meta',
-    'Apple',
-    'Goldman Sachs',
-    'JP Morgan',
-    'Morgan Stanley',
-    'HDFC Bank',
-    'ICICI Bank',
-    'Axis Bank',
-    'Kotak Mahindra Bank',
-    'Yes Bank',
-    'IndusInd Bank',
-    'SBI',
-    'PNB',
-    'Bank of Baroda',
-    'TCS',
-    'Infosys',
-    'Wipro',
-    'HCL Technologies',
-    'Tech Mahindra',
-    'Cognizant',
-    'Accenture',
-    'Capgemini',
-    'Deloitte',
-    'EY',
-    'KPMG',
-    'PwC',
-    'McKinsey & Company',
-    'BCG',
-    'Bain & Company',
-    'Genpact',
-    'EXL Service',
-    'WNS Global',
-    'Mphasis',
-    'LTIMindtree',
-    'Mindtree',
-    'Larsen & Toubro',
-    'Reliance Industries',
-    'Adani Group',
-    'Tata Group',
-    'Mahindra & Mahindra',
-    'Maruti Suzuki',
-    'Hyundai Motor India',
-    'Samsung India',
-    'LG Electronics India',
-    'HUL',
-    'ITC Limited',
-    'Nestlé India',
-    'Britannia Industries',
-    'Dabur India',
-    'Asian Paints',
-    'Berger Paints',
-    'Pidilite Industries',
-    'Zomato',
-    'Swiggy',
-    'Flipkart',
-    'Myntra',
-    'Nykaa',
-    'Razorpay',
-    'PhonePe',
-    'Paytm',
-    'Ola',
-    'Uber',
-    'Apna',
-    'Apna Advantage',
-    'Naukri',
-    'LinkedIn',
-    'X',
-    'Twitter',
-    'Facebook',
-    'Instagram',
-    'YouTube',
-    'Goldman Sachs',
-    'JP Morgan',
-    'HDFC Bank',
-    'Axis Bank',
-    'Kotak Mahindra Bank',
-    'Yes Bank',
-    'IndusInd Bank',
-    'SBI',
-    'PNB',
-    'Bank of Baroda',
-    'ICICI Bank',
-    'MakeMyTrip',
-    'IndiGo',
-    'Air India',
-    'Dr. Reddy’s Laboratories',
-    'Sun Pharmaceutical',
-    'Cipla',
-    'Biocon',
-    'Apollo Hospitals',
-    'Max Healthcare',
-    'Fortis Healthcare',
-    'Practo',
-    'PharmEasy',
-    '1mg',
-    'BYJU’S',
-    'Unacademy',
-    'Vedantu',
-    'UpGrad',
-    'Freshworks',
-    'Zoho Corporation',
-    'Postman',
-    'CRED',
-    'Groww',
-    'Zerodha',
-    'NSE',
-    'BSE',
-    'NPCI',
-    'Ather Energy',
-    'Ola Electric',
-    'Bosch India',
-    'Siemens India',
-    'ABB India',
-    'Schneider Electric India',
-    'Johnson & Johnson India',
-    'P&G India',
-    'Coca-Cola India',
-    'PepsiCo India',
-    'Starbucks India',
-    'Titan Company',
-    'Lenskart',
-    'Boat',
-    'Mamaearth',
-    'Wakefit',
-    'NoBroker',
-    'Housing.com',
-    'Square Yards',
-    'JLL India',
-    'CBRE India',
-    'Self-employed / Freelance',
-    'Early-stage startup (1–50)',
-    'Growth-stage startup',
-    'Other (type to search)',
-  ]),
-].sort((a, b) => a.localeCompare(b))
+/** Sorted company names from companies.js — work experience & dream company dropdowns. */
+export const WORK_EMPLOYERS = companyNames
 
 export function searchWorkEmployers(query, limit = 28) {
   const q = String(query || '')
     .trim()
     .toLowerCase()
   if (!q) return WORK_EMPLOYERS.slice(0, limit)
-  return WORK_EMPLOYERS.filter((c) => c.toLowerCase().includes(q)).slice(0, limit)
+
+  return WORK_EMPLOYERS.filter((name) => name.toLowerCase().includes(q))
+    .sort((a, b) => {
+      const al = a.toLowerCase()
+      const bl = b.toLowerCase()
+      const aPrefix = al.startsWith(q)
+      const bPrefix = bl.startsWith(q)
+      if (aPrefix !== bPrefix) return aPrefix ? -1 : 1
+      return al.localeCompare(bl)
+    })
+    .slice(0, limit)
 }
 
 export const WORK_INDUSTRIES = [

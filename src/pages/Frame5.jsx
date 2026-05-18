@@ -3,16 +3,17 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button.jsx'
 import { useAppState } from '../hooks/appState.jsx'
 import { resolvePdRole } from '../utils/roleKey.js'
-import { flattenIndustryRoles, INDUSTRIES } from '../utils/fasttrackData.js'
 import { PD } from '../utils/pathData.js'
-import { ROI_YEARS } from '../utils/roiData.js'
+import { DEFAULT_DEGREE_TENURE_MONTHS, ROI_YEARS } from '../utils/roiData.js'
 import {
-  breakEvenYear,
   buildFallbackRoiModel,
   chartYearTicks,
-  cumulativeExtraLacs,
   fmtRupeeMoK,
-  pathInvestmentLacs,
+  pctIncreaseFromBaseline,
+  potentialBankBalanceLacs,
+  resolveMonthlySalaryRupees,
+  suggestedBreakEvenYear,
+  totalExtraFromTenPctIncrements,
 } from '../utils/roiModel.js'
 import { formatBudgetLacs } from '../utils/formatINR.js'
 
@@ -22,13 +23,8 @@ const PATH_TABS = [
   { key: 'trad', label: 'Traditional', emoji: '📈', hint: 'Highest investment · slowest salary growth' },
 ]
 
-const PATH_COMPARE = [
-  { key: 'accel', label: 'Accelerated', color: '#48DB85' },
-  { key: 'fast', label: 'Fast Track', color: '#FFD700' },
-  { key: 'trad', label: 'Traditional', color: '#888' },
-]
-
 const BRAND_PURPLE = '#6320EE'
+const EXTRA_EARNINGS_YEARS = 5
 
 function fmtLacs(n) {
   if (n == null || Number.isNaN(n)) return '—'
@@ -37,8 +33,7 @@ function fmtLacs(n) {
 
 export function Frame5() {
   const nav = useNavigate()
-  const { s, selIndustry, selRole, rPath, setRPath, rYear, setRYear, eduBudgetLacs, openPathDrawer } =
-    useAppState()
+  const { s, selRole, rPath, setRPath, rYear, setRYear, openPathDrawer } = useAppState()
 
   const [roiModel, setRoiModel] = useState(null)
   const [roiLoading, setRoiLoading] = useState(true)
@@ -48,45 +43,24 @@ export function Frame5() {
   const destinationTitle = (selRole && String(selRole).trim()) || 'your goal'
   const pd = PD[pdKey] || PD['Finance Manager']
 
-  const industryLabel = useMemo(() => {
-    const row = INDUSTRIES.find((i) => i.id === selIndustry)
-    return row?.n || 'All Functions'
-  }, [selIndustry])
+  const monthlySalaryRupees = useMemo(() => resolveMonthlySalaryRupees(s), [s])
 
-  const roleCard = useMemo(() => {
-    const flat = flattenIndustryRoles(selIndustry === 'all' ? 'all' : selIndustry)
-    const t = (selRole || '').trim()
-    return flat.find((c) => c.role === t) || flat.find((c) => c.role === pdKey) || flat[0]
-  }, [selRole, selIndustry, pdKey])
-
-  const roleTitleForRoi = (selRole || '').trim() || pdKey
-
-  const salaryLpa = useMemo(() => {
-    const v = Number(String(s.salary || '').replace(/[^\d.]/g, ''))
-    if (Number.isFinite(v) && v > 0) return v
-    const d = Number(s.dSalary)
-    return Number.isFinite(d) && d > 0 ? d : 8
-  }, [s.dSalary, s.salary])
+  const degreeTenureMonths = DEFAULT_DEGREE_TENURE_MONTHS
 
   useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setRoiLoading(true)
-      const next = buildFallbackRoiModel({ salaryLpa, eduBudgetLacs })
-      if (!cancelled) {
-        setRoiModel(next)
-        setRoiLoading(false)
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [roleTitleForRoi, industryLabel, roleCard, salaryLpa, eduBudgetLacs])
+    setRoiLoading(true)
+    const next = buildFallbackRoiModel({
+      monthlySalaryRupees,
+      degreeTenureMonths,
+    })
+    setRoiModel(next)
+    setRoiLoading(false)
+  }, [monthlySalaryRupees, degreeTenureMonths])
 
   const stag = roiModel?.stagMonthlyK
   const pathSeries = roiModel?.pathMonthlyK?.[rPath]
-  const cardCopy = roiModel?.cardCopy
+  const accelSeries = roiModel?.pathMonthlyK?.accel
+  const baselineK = roiModel?.growthBaseK ?? 0
 
   const ticks = chartYearTicks(rYear)
   const chartMaxK = useMemo(() => {
@@ -103,40 +77,11 @@ export function Frame5() {
   const pathLabel = PATH_TABS.find((p) => p.key === rPath)?.label ?? 'Your Path'
   const pathYearsToRole = pd[rPath]?.yrs ?? pd.trad?.yrs ?? '—'
 
-  const salaryPathEnd = pathSeries?.[rYear] ?? 0
-  const salaryStagEnd = stag?.[rYear] ?? 0
-  const moDiff = Math.max(0, Math.round(salaryPathEnd - salaryStagEnd))
+  const salaryAccelEnd = accelSeries?.[rYear] ?? 0
 
-  const totalExtra = stag && pathSeries ? cumulativeExtraLacs(stag, pathSeries, rYear) : 0
-  const bankApprox = Math.round(totalExtra * 0.35 * 10) / 10
-  const pathInvest = pathInvestmentLacs(rPath, eduBudgetLacs)
-  const beYear = stag && pathSeries ? breakEvenYear(stag, pathSeries, eduBudgetLacs, rPath) : null
-
-  const pathCompareAtHorizon = useMemo(() => {
-    if (!roiModel?.stagMonthlyK || !roiModel?.pathMonthlyK) return []
-    const stagK = roiModel.stagMonthlyK
-    return PATH_COMPARE.map((p) => {
-      const series = roiModel.pathMonthlyK[p.key]
-      const salaryK = series?.[rYear] ?? 0
-      const invest = pathInvestmentLacs(p.key, eduBudgetLacs)
-      const extra = cumulativeExtraLacs(stagK, series, rYear)
-      return { ...p, salaryK, invest, extra }
-    })
-  }, [roiModel, rYear, eduBudgetLacs])
-
-  const totalExtraSub =
-    cardCopy?.totalExtraSub?.trim() ||
-    `Over ${rYear} years vs staying at your current trajectory — before tax.`
-
-  const bankSub =
-    cardCopy?.bankSub?.trim() ||
-    `If you save 35% of extra earnings over ${rYear} years — on top of current savings.`
-
-  const breakEvenSub =
-    cardCopy?.breakEvenSub?.trim() ||
-    (pathInvest > 0
-      ? `When cumulative extra earnings surpass ~₹${pathInvest}L upskilling on the ${pathLabel} path.`
-      : 'When extra earnings surpass a typical upskilling investment for this move.')
+  const totalExtra = accelSeries ? totalExtraFromTenPctIncrements(accelSeries, EXTRA_EARNINGS_YEARS) : 0
+  const bankApprox = accelSeries ? potentialBankBalanceLacs(accelSeries) : 0
+  const beYear = suggestedBreakEvenYear(degreeTenureMonths)
 
   return (
     <section className="absolute inset-0 overflow-y-auto px-9 pb-10 pt-7" data-app-page-scroll>
@@ -252,6 +197,9 @@ export function Frame5() {
                   const isHorizon = yr === rYear
                   const isHover = hoverYear === yr
                   const moDelta = Math.max(0, Math.round(pathSeries[yr] - stag[yr]))
+                  const pctStag = pctIncreaseFromBaseline(stag[yr], baselineK)
+                  const pctPath = pctIncreaseFromBaseline(pathSeries[yr], baselineK)
+                  const fmtPct = (p) => (p == null ? '—' : p >= 0 ? `+${p}%` : `${p}%`)
                   return (
                     <div
                       key={`col-${yr}`}
@@ -272,9 +220,13 @@ export function Frame5() {
                         <span className="text-[#ccc]">/</span>
                         <span style={{ color: BRAND_PURPLE }}>{fmtRupeeMoK(pathSeries[yr])}</span>
                       </div>
-                      {isHover && moDelta > 0 ? (
-                        <div className="mb-1 rounded-[6px] bg-[rgba(99,32,238,.1)] px-2 py-0.5 text-[9px] font-[800] text-[#6320EE]">
-                          +{fmtRupeeMoK(moDelta)} vs no action
+                      {isHover ? (
+                        <div className="mb-1 flex w-full flex-col items-center gap-0.5 rounded-[8px] bg-[rgba(99,32,238,.08)] px-2 py-1 text-[9px] font-[800] leading-snug">
+                          <span className="text-[#737373]">No action {fmtPct(pctStag)}</span>
+                          <span className="text-[#6320EE]">{pathLabel} {fmtPct(pctPath)}</span>
+                          {moDelta > 0 ? (
+                            <span className="text-[8.5px] font-[700] text-[#888]">+{fmtRupeeMoK(moDelta)} vs no action</span>
+                          ) : null}
                         </div>
                       ) : (
                         <div className="mb-1 h-[18px]" aria-hidden />
@@ -286,7 +238,7 @@ export function Frame5() {
                             isHover ? 'scale-y-[1.04] opacity-90' : 'group-hover/col:opacity-85',
                           ].join(' ')}
                           style={{ height: `${Math.max(8, hS)}px` }}
-                          title={`No action: ${fmtRupeeMoK(stag[yr])}`}
+                          title={`No action: ${fmtRupeeMoK(stag[yr])} (${fmtPct(pctStag)} vs baseline)`}
                         />
                         <div
                           className={[
@@ -298,7 +250,7 @@ export function Frame5() {
                                 : 'shadow-[0_8px_22px_rgba(99,32,238,.22)] group-hover/col:shadow-[0_10px_26px_rgba(99,32,238,.3)]',
                           ].join(' ')}
                           style={{ height: `${Math.max(8, hP)}px` }}
-                          title={`Your path: ${fmtRupeeMoK(pathSeries[yr])}`}
+                          title={`${pathLabel}: ${fmtRupeeMoK(pathSeries[yr])} (${fmtPct(pctPath)} vs baseline)`}
                         />
                       </div>
                       <div
@@ -315,33 +267,6 @@ export function Frame5() {
                 })}
               </div>
 
-              <div className="mt-5 grid gap-2 border-t border-[rgba(0,0,0,.06)] pt-4 sm:grid-cols-3">
-                {pathCompareAtHorizon.map((row) => {
-                  const active = row.key === rPath
-                  return (
-                    <button
-                      key={row.key}
-                      type="button"
-                      onClick={() => setRPath(row.key)}
-                      className={[
-                        'rounded-[11px] border px-3 py-2.5 text-left transition-all duration-200',
-                        active
-                          ? 'border-[rgba(99,32,238,.35)] bg-[rgba(99,32,238,.06)] shadow-[0_4px_14px_rgba(99,32,238,.12)]'
-                          : 'border-[rgba(0,0,0,.07)] bg-[#fafafa] hover:border-[rgba(99,32,238,.25)] hover:bg-white hover:shadow-[0_4px_12px_rgba(0,0,0,.06)]',
-                      ].join(' ')}
-                    >
-                      <div className="mb-1 flex items-center gap-1.5 text-[11px] font-[800]" style={{ color: row.color }}>
-                        <span className="inline-block h-2 w-2 rounded-full" style={{ background: row.color }} />
-                        {row.label}
-                      </div>
-                      <div className="text-[13px] font-[800] text-[#0C0C0C]">{fmtRupeeMoK(row.salaryK)}</div>
-                      <div className="mt-0.5 text-[10px] font-[600] text-[#888]">
-                        ~₹{row.invest}L invest · +{fmtLacs(row.extra)} extra by yr {rYear}
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
             </>
           ) : (
             <div className="flex h-[240px] items-center justify-center text-[13px] font-[600] text-[#aaa]">
@@ -352,58 +277,26 @@ export function Frame5() {
 
         {/* Metric cards */}
         <div className="mb-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-[14px] border border-[rgba(0,0,0,.06)] border-t-[4px] border-t-[#6320EE] bg-white p-[16px] shadow-[0_2px_12px_rgba(0,0,0,.04)]">
-            <div className="mb-2 text-[18px] leading-none" aria-hidden>
-              📈
+          {[
+            { border: '#6320EE', icon: '📈', label: `Your salary by year ${rYear}`, value: fmtRupeeMoK(salaryAccelEnd) },
+            { border: '#15803d', icon: '💰', label: 'Total extra earnings', value: fmtLacs(totalExtra) },
+            { border: '#eab308', icon: '🏦', label: 'Potential bank balance in 5 years', value: `${fmtLacs(bankApprox)}+` },
+            { border: '#6366f1', icon: '⏱️', label: 'Break-even point', value: `Year ${beYear}` },
+          ].map((card) => (
+            <div
+              key={card.label}
+              className="flex min-h-[128px] flex-col rounded-[14px] border border-[rgba(0,0,0,.06)] border-t-[4px] bg-white p-[16px] shadow-[0_2px_12px_rgba(0,0,0,.04)]"
+              style={{ borderTopColor: card.border }}
+            >
+              <div className="mb-2 text-[18px] leading-none" aria-hidden>
+                {card.icon}
+              </div>
+              <div className="mb-2 text-[9px] font-[800] uppercase tracking-[.12em] text-[#888]">{card.label}</div>
+              <div className="mt-auto text-[26px] font-[800] leading-none text-[#0C0C0C] [font-family:'DM Serif Display',serif]">
+                {card.value}
+              </div>
             </div>
-            <div className="mb-2 text-[9px] font-[800] uppercase tracking-[.12em] text-[#888]">Your salary by year {rYear}</div>
-            <div className="text-[26px] font-[800] leading-none text-[#0C0C0C] [font-family:'DM Serif Display',serif]">
-              {fmtRupeeMoK(salaryPathEnd)}
-            </div>
-            <p className="mt-3 text-[11.5px] leading-[1.45] text-[#666]">
-              vs {fmtRupeeMoK(salaryStagEnd)} with no action
-              {moDiff > 0 ? (
-                <>
-                  {' '}
-                  — a {fmtRupeeMoK(moDiff)} difference
-                </>
-              ) : null}
-              .
-            </p>
-          </div>
-
-          <div className="rounded-[14px] border border-[rgba(0,0,0,.06)] border-t-[4px] border-t-[#15803d] bg-white p-[16px] shadow-[0_2px_12px_rgba(0,0,0,.04)]">
-            <div className="mb-2 text-[18px] leading-none" aria-hidden>
-              💰
-            </div>
-            <div className="mb-2 text-[9px] font-[800] uppercase tracking-[.12em] text-[#888]">Total extra earnings</div>
-            <div className="text-[26px] font-[800] leading-none text-[#0C0C0C] [font-family:'DM Serif Display',serif]">{fmtLacs(totalExtra)}</div>
-            <p className="mt-3 text-[11.5px] leading-[1.45] text-[#666]">{totalExtraSub}</p>
-          </div>
-
-          <div className="rounded-[14px] border border-[rgba(0,0,0,.06)] border-t-[4px] border-t-[#eab308] bg-white p-[16px] shadow-[0_2px_12px_rgba(0,0,0,.04)]">
-            <div className="mb-2 text-[18px] leading-none" aria-hidden>
-              🏦
-            </div>
-            <div className="mb-2 text-[9px] font-[800] uppercase tracking-[.12em] text-[#888]">
-              Potential bank balance in {rYear} years
-            </div>
-            <div className="text-[26px] font-[800] leading-none text-[#0C0C0C] [font-family:'DM Serif Display',serif]">
-              {fmtLacs(bankApprox)}+
-            </div>
-            <p className="mt-3 text-[11.5px] leading-[1.45] text-[#666]">{bankSub}</p>
-          </div>
-
-          <div className="rounded-[14px] border border-[rgba(0,0,0,.06)] border-t-[4px] border-t-[#6366f1] bg-white p-[16px] shadow-[0_2px_12px_rgba(0,0,0,.04)]">
-            <div className="mb-2 text-[18px] leading-none" aria-hidden>
-              ⏱️
-            </div>
-            <div className="mb-2 text-[9px] font-[800] uppercase tracking-[.12em] text-[#888]">Break-even point</div>
-            <div className="text-[26px] font-[800] leading-none text-[#0C0C0C] [font-family:'DM Serif Display',serif]">
-              {beYear != null ? `Year ${beYear}` : 'Beyond horizon'}
-            </div>
-            <p className="mt-3 text-[11.5px] leading-[1.45] text-[#666]">{breakEvenSub}</p>
-          </div>
+          ))}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[rgba(0,0,0,.06)] pt-6">

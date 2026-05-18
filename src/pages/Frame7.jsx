@@ -5,9 +5,11 @@ import { useAppState } from '../hooks/appState.jsx'
 import { EDU_MAX_PILLS } from '../data/frame1Education.js'
 import { resolvePdRole } from '../utils/roleKey.js'
 import { flattenIndustryRoles, INDUSTRIES } from '../utils/fasttrackData.js'
+import { buildFallbackOnlineCollegePicks } from '../utils/onlinePartnerUniversities.js'
 import {
-  buildFallbackOnlineCollegePicks,
-} from '../utils/onlinePartnerUniversities.js'
+  buildUpgradProgrammeSections,
+  profileIsPostgraduate,
+} from '../utils/upgradRecommendations.js'
 import { buildFallbackSpec } from '../utils/specialisationData.js'
 import { formatLPA, formatRupeeMonthly, formatSalaryLabelIndian } from '../utils/formatINR.js'
 
@@ -59,6 +61,7 @@ export function Frame7() {
   const [spec, setSpec] = useState(null)
   const [loading, setLoading] = useState(true)
   const [collegePicks, setCollegePicks] = useState([])
+  const [programmeSections, setProgrammeSections] = useState([])
   const [collegesLoading, setCollegesLoading] = useState(false)
 
   const pdKey = resolvePdRole(selRole)
@@ -80,13 +83,16 @@ export function Frame7() {
   const specProfileSnap = useMemo(
     () => ({
       edu: s.edu,
+      eduMax: s.eduMax,
       spec: s.spec,
       role: s.role,
       func: s.func,
       dRole: s.dRole,
     }),
-    [s.edu, s.spec, s.role, s.func, s.dRole],
+    [s.edu, s.eduMax, s.spec, s.role, s.func, s.dRole],
   )
+
+  const isPostgraduate = profileIsPostgraduate(specProfileSnap)
 
   useEffect(() => {
     let cancelled = false
@@ -109,9 +115,14 @@ export function Frame7() {
     let cancelled = false
     async function loadColleges() {
       setCollegesLoading(true)
-      const picks = buildFallbackOnlineCollegePicks(destinationTitle, spec.title)
+      const sections = buildUpgradProgrammeSections(destinationTitle, spec.title, specProfileSnap, {
+        maxPerTier: isPostgraduate ? 3 : 4,
+        maxTotal: 8,
+      })
+      const picks = buildFallbackOnlineCollegePicks(destinationTitle, spec.title, specProfileSnap)
       if (!cancelled) {
-        setCollegePicks(picks.slice(0, 5))
+        setProgrammeSections(sections)
+        setCollegePicks(picks)
         setCollegesLoading(false)
       }
     }
@@ -119,7 +130,7 @@ export function Frame7() {
     return () => {
       cancelled = true
     }
-  }, [spec?.title, destinationTitle, industryLabel, roleCard])
+  }, [spec?.title, destinationTitle, specProfileSnap, isPostgraduate])
 
   const pathLabel = PATH_LABELS.find((p) => p.key === gapPath)?.label ?? gapPath
   const roiPath = PATH_LABELS.find((p) => p.key === rPath)?.label ?? rPath
@@ -130,7 +141,8 @@ export function Frame7() {
   const currentTitle = (s.role || '').trim() || 'Current role'
   const currentSub = [s.func, s.company].filter(Boolean).join(' · ') || 'Starting point (from your profile)'
 
-  const anchorDisplay = collegePicks[0] || spec?.anchorUni || '—'
+  const anchorDisplay =
+    programmeSections[0]?.programs[0]?.universityLabel || collegePicks[0] || spec?.anchorUni || '—'
 
   return (
     <section className="absolute inset-0 overflow-y-auto px-9 pb-10 pt-7" data-app-page-scroll>
@@ -282,7 +294,50 @@ export function Frame7() {
 
                 <div className="mt-4 border-t border-dashed border-[rgba(0,0,0,.1)] pt-3">
                   <div className="mb-2 flex items-center gap-2 text-[10px] font-[800] uppercase tracking-[.08em] text-[#888] after:flex-1 after:h-px after:bg-[repeating-linear-gradient(90deg,rgba(0,0,0,.06)_0_2px,transparent_2px_5px)] after:content-['']">
-                    Strong online options for this role (max 5)
+                    upGrad programmes for your profile
+                    {isPostgraduate ? ' · doctorate first' : ''}
+                  </div>
+                  {collegesLoading ? (
+                    <div className="mb-4 space-y-2">
+                      {[1, 2].map((k) => (
+                        <div key={k} className="h-[64px] animate-pulse rounded-[9px] bg-[rgba(0,0,0,.04)]" />
+                      ))}
+                    </div>
+                  ) : programmeSections.length ? (
+                    <div className="mb-4 space-y-3">
+                      {programmeSections.map((section) => (
+                        <div key={section.tier}>
+                          <div className="mb-1.5 text-[9px] font-[800] uppercase tracking-[.08em] text-[#37017B]">
+                            {section.tierLabel}
+                          </div>
+                          <div className="space-y-2">
+                            {section.programs.map((prog) => (
+                              <div
+                                key={prog.id}
+                                className="rounded-[9px] border border-[rgba(55,1,123,.12)] bg-[rgba(55,1,123,.04)] px-3 py-2.5"
+                              >
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                  <div className="min-w-0 text-[11.5px] font-[800] leading-snug text-[#0C0C0C]">
+                                    {prog.shortName || prog.name}
+                                  </div>
+                                  <span className="shrink-0 rounded-[5px] bg-[rgba(55,1,123,.1)] px-[6px] py-[2px] text-[8.5px] font-[800] uppercase tracking-[.05em] text-[#37017B]">
+                                    {prog.credential}
+                                  </span>
+                                </div>
+                                <div className="mt-1 text-[10px] font-[600] text-[#666]">{prog.universityLabel}</div>
+                                <div className="mt-0.5 text-[9.5px] text-[#888]">
+                                  {prog.duration} · {prog.field}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <div className="mb-2 flex items-center gap-2 text-[10px] font-[800] uppercase tracking-[.08em] text-[#888] after:flex-1 after:h-px after:bg-[repeating-linear-gradient(90deg,rgba(0,0,0,.06)_0_2px,transparent_2px_5px)] after:content-['']">
+                    Partner universities for this programme
                   </div>
                   {collegesLoading ? (
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

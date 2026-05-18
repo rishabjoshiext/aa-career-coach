@@ -312,7 +312,7 @@ export function buildFallbackSpec(destinationTitle, card, profile = {}) {
     chips,
     curriculum,
     outcomes,
-    anchorUni: buildFallbackOnlineCollegePicks(dest, title)[0] || 'Amity University',
+    anchorUni: buildFallbackOnlineCollegePicks(dest, title, profile)[0] || 'Amity University',
     jobs,
     growth: card?.growth ? String(card.growth) : `+${g}%`,
     gap: card?.naukri ? 'Supply vs postings varies by quarter' : 'Varies by metro and seniority',

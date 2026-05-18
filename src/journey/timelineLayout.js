@@ -115,3 +115,11 @@ export function milestoneCentersForPath(
   }
   return centers
 }
+
+/** Accelerated path (3 cards): pin middle milestone to centre between first and last. */
+export function accelCentersThreeBox(firstCenter, endCenter) {
+  const first = Number(firstCenter) || 0
+  const last = Number(endCenter) || first
+  const mid = Math.round((first + last) / 2)
+  return [first, mid, last]
+}

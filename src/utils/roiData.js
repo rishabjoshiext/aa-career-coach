@@ -1,18 +1,32 @@
-/** Salary trajectory assumptions for Frame 5 (aligned with path tiers). */
+/** Salary trajectory assumptions for Frame 5 — compounded YoY growth. */
 
 export const ROI_YEARS = [3, 5, 7, 10]
 
-/** Annual compounding uplift on gross income for “no structured move” trajectory */
-export const STAGNATION_RATE = 0.055
+/** Grey “no action” bar — slow yearly growth */
+export const NO_ACTION_YOY_GROWTH = 0.04
 
-/** Path-specific annual income growth — accel > fast > trad (returns) */
-export const PATH_GROWTH = {
-  trad: 0.088,
-  fast: 0.118,
-  accel: 0.152,
+/** Purple path — compounded yearly growth by tier */
+export const PATH_YOY_GROWTH = {
+  trad: 0.09,
+  fast: 0.12,
+  accel: 0.18,
 }
 
-/** Upskilling spend vs user budget — accel lowest, trad highest (investment) */
+/** When profile salary is missing — annual LPA from Year 1 onward */
+export const ROI_FALLBACK_LPA = 2.5
+
+/** Total extra earnings card — 10% of annual path salary per year, summed */
+export const EXTRA_EARNINGS_INCREMENT_RATE = 0.1
+
+/** Default online degree programme length (months) → break-even = tenure + 1 yr */
+export const DEFAULT_DEGREE_TENURE_MONTHS = 24
+
+export function degreeTenureYears(tenureMonths = DEFAULT_DEGREE_TENURE_MONTHS) {
+  const mo = Number(tenureMonths) || DEFAULT_DEGREE_TENURE_MONTHS
+  return Math.max(1, Math.round(mo / 12))
+}
+
+/** Upskilling spend vs user budget — accel lowest, trad highest (legacy) */
 export const PATH_INVESTMENT_MULT = {
   accel: 0.82,
   fast: 1.0,
@@ -23,46 +37,4 @@ export function pathInvestmentLacs(pathKey, budgetLacs) {
   const b = Number(budgetLacs) || 0
   const mult = PATH_INVESTMENT_MULT[pathKey] ?? 1
   return Math.round(b * mult * 10) / 10
-}
-
-/**
- * Projected salary multiple vs starting annual income after `years`.
- * @param {'trad'|'fast'|'accel'} pathKey
- * @param {boolean} stagnation
- */
-export function salaryMultiple(pathKey, years, stagnation) {
-  const r = stagnation ? STAGNATION_RATE : PATH_GROWTH[pathKey] || PATH_GROWTH.trad
-  return (1 + r) ** years
-}
-
-/** Approximate cumulative gross earnings multiplier (integral of geometric-ish steps) */
-export function cumulativeIncomeFactor(pathKey, years, stagnation) {
-  const r = stagnation ? STAGNATION_RATE : PATH_GROWTH[pathKey] || PATH_GROWTH.trad
-  let sum = 0
-  let w = 1
-  for (let y = 1; y <= years; y += 1) {
-    sum += w
-    w *= 1 + r
-  }
-  return sum
-}
-
-/**
- * Extra cumulative gross income (in same units as `baseLpa` annual, i.e. “LPA·years” scale) vs stagnation.
- */
-export function cumulativeEarningsDeltaLpa(pathKey, years) {
-  const cumPath = cumulativeIncomeFactor(pathKey, years, false)
-  const cumStag = cumulativeIncomeFactor(pathKey, years, true)
-  return cumPath - cumStag
-}
-
-/** First year count (1–20) where cumulative uplift ≥ budget (₹ Lacs). Null if not within 20 yrs. */
-export function yearsToRecoverBudget(baseLpa, pathKey, budgetLacs) {
-  const budgetAnnualUnits = Number(budgetLacs) || 0
-  if (budgetAnnualUnits <= 0 || !baseLpa) return 1
-  for (let y = 1; y <= 20; y += 1) {
-    const delta = baseLpa * cumulativeEarningsDeltaLpa(pathKey, y)
-    if (delta >= budgetAnnualUnits) return y
-  }
-  return null
 }
