@@ -1,7 +1,7 @@
 import { GAPS_BY_ROLE } from './gapsData.js'
 import { getDegreePersonalDev } from './degreePersonalDevMap.js'
 import { getDegreeSkills } from './degreeSkillsMap.js'
-import { inferFallbackDegreeTrack, profileEduLevel } from './specialisationData.js'
+import { inferFallbackDegreeTrack, isDoctorateDegree, profileEduLevel } from './specialisationData.js'
 
 /** Strip degree-specific wording from Frame 4 skill / personal-dev copy. */
 function generalizeGapSubtext(text) {
@@ -163,7 +163,7 @@ function resolveEduMax(profile = {}) {
 export function shouldShowMbaInvestment(profile = {}, destinationTitle = 'your goal', roleCard = null) {
   if (profileEduLevel(profile) !== 'master') return false
   const track = inferFallbackDegreeTrack(destinationTitle, roleCard, profile)
-  return track.degree === 'Online MBA'
+  return track.degree === 'Online MBA' || isDoctorateDegree(track.degree)
 }
 
 /** Skills & tools for the recommended degree — heading + subtext only (assess in Frame 4). */
@@ -216,12 +216,31 @@ export function buildEducationGapBlock(profile = {}, destinationTitle = 'your go
         'miss',
       ),
     ]
-  } else if (eduMax === 'graduate' || eduMax === 'postgraduate') {
+  } else if (eduMax === 'postgraduate') {
+    const { degree, specializationTrack } = inferFallbackDegreeTrack(dest, roleCard, profile)
+    const doctorateName = isDoctorateDegree(degree) ? degree.replace(/^Online\s+/i, '') : 'Doctorate'
+    const doctorateLine = isDoctorateDegree(degree)
+      ? `${degree} — ${specializationTrack}`
+      : `Online DBA — ${specializationTrack}`
+
+    items = [
+      item(
+        doctorateName,
+        `You already hold a PG credential — the next step is ${doctorateLine} to compete for ${dest} at executive and leadership levels.`,
+        'crit',
+      ),
+      item(
+        'Other Master\'s degree',
+        `An additional role-aligned master's (beyond your current PG) can sharpen shortlisting when you want a second specialisation without a full doctoral commitment.`,
+        'miss',
+      ),
+    ]
+  } else if (eduMax === 'graduate') {
     items = [
       item(
         'Master\'s degree',
         `Role-aligned master's helps you compete for ${dest} against candidates with specialised PG credentials.`,
-        eduMax === 'postgraduate' ? 'miss' : 'crit',
+        'crit',
       ),
       item(
         'PhD / doctoral qualification',

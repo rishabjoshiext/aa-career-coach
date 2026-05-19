@@ -28,6 +28,32 @@ export function isMasterDegree(degree) {
   return /^Online M/i.test(String(degree || ''))
 }
 
+export function isDoctorateDegree(degree) {
+  return /^Online DBA/i.test(String(degree || ''))
+}
+
+/** User chose an MBA-class PG degree on Frame 1 (MBA, executive MBA, PGDM, etc.). */
+export function profileSelectedPgIsMba(profile = {}) {
+  const d = String(profile.degreeEdu || '')
+    .trim()
+    .toLowerCase()
+  if (!d) return false
+  if (d === 'mba' || d.startsWith('mba(')) return true
+  if (d === 'pgdm' || d === 'pgp') return true
+  if (d === 'master of management studies') return true
+  return false
+}
+
+/** MBA-track pick → DBA primary recommendation for MBA post-graduates. */
+function applyMbaPgDbaPriority(pick, profile) {
+  if (!profileSelectedPgIsMba(profile)) return pick
+  if (pick.degree !== 'Online MBA') return pick
+  return {
+    degree: 'Online DBA',
+    specializationTrack: pick.specializationTrack,
+  }
+}
+
 function combinedHints(destinationTitle, card, profile) {
   const dest = String(destinationTitle || '').toLowerCase()
   const desc = String(card?.desc || '').toLowerCase()
@@ -157,11 +183,39 @@ export function inferFallbackDegreeTrack(destinationTitle, card, profile = {}) {
     pick = { degree: 'Online MBA', specializationTrack: 'Management & Leadership' }
   }
 
-  return constrainDegreeLevel(pick, eduLevel, raw)
+  pick = constrainDegreeLevel(pick, eduLevel, raw)
+  return applyMbaPgDbaPriority(pick, profile)
 }
 
 function curriculumForDegree(degree, track) {
   const t = track.toLowerCase()
+  if (degree === 'Online DBA') {
+    if (t.includes('finance')) {
+      return [
+        'Doctoral research methods in management',
+        'Advanced corporate finance & valuation',
+        'Governance, risk & regulatory strategy',
+        'Executive decision systems & MIS',
+        'Dissertation: applied finance capstone',
+      ]
+    }
+    if (t.includes('market')) {
+      return [
+        'Strategic marketing & brand architecture',
+        'Digital growth & customer analytics',
+        'Executive communication & stakeholder influence',
+        'Applied research in go-to-market',
+        'Dissertation: growth strategy capstone',
+      ]
+    }
+    return [
+      'Executive leadership & organisational design',
+      'Strategy, innovation & competitive advantage',
+      'Business analytics for senior managers',
+      'Research design & scholarly writing',
+      'Dissertation: integrated business leadership project',
+    ]
+  }
   if (degree === 'Online MBA') {
     if (t.includes('finance')) {
       return [
@@ -262,8 +316,14 @@ function curriculumForDegree(degree, track) {
   ]
 }
 
-function chipsForTrack(track) {
+function chipsForTrack(track, degree = '') {
   const t = track.toLowerCase()
+  if (degree === 'Online DBA') {
+    if (t.includes('finance') || t.includes('account')) {
+      return ['Executive finance', 'Doctoral research', 'Board-ready reporting', 'Strategic leadership']
+    }
+    return ['Doctoral research', 'Executive leadership', 'Strategy & governance', 'Industry dissertation']
+  }
   if (t.includes('finance') || t.includes('account')) {
     return ['Financial Modelling', 'Corporate Taxation', 'SAP Basics', 'MIS & Power BI']
   }
@@ -298,7 +358,10 @@ export function buildFallbackSpec(destinationTitle, card, profile = {}) {
   const title = `${degree} — ${specializationTrack}`
 
   const curriculum = curriculumForDegree(degree, specializationTrack)
-  const chips = chipsForTrack(specializationTrack)
+  const chips = chipsForTrack(specializationTrack, degree)
+  const subtitle = profileSelectedPgIsMba(profile)
+    ? 'DBA-first pathway for MBA graduates — then role-aligned MBA specialisations from partner universities.'
+    : 'Bridges all critical education and skill gaps identified in your profile.'
 
   const outcomes = [
     `Stronger credential fit toward ${dest}`,
@@ -308,7 +371,7 @@ export function buildFallbackSpec(destinationTitle, card, profile = {}) {
 
   return {
     title,
-    subtitle: 'Bridges all critical education and skill gaps identified in your profile.',
+    subtitle,
     chips,
     curriculum,
     outcomes,

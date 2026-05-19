@@ -531,6 +531,7 @@ export function Frame4() {
     journey,
     s.eduMax,
     s.edu,
+    s.degreeEdu,
     s.spec,
     s.func,
     s.dRole,

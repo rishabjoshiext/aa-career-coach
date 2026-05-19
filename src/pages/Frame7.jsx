@@ -85,12 +85,13 @@ export function Frame7() {
     () => ({
       edu: s.edu,
       eduMax: s.eduMax,
+      degreeEdu: s.degreeEdu,
       spec: s.spec,
       role: s.role,
       func: s.func,
       dRole: s.dRole,
     }),
-    [s.edu, s.eduMax, s.spec, s.role, s.func, s.dRole],
+    [s.edu, s.eduMax, s.degreeEdu, s.spec, s.role, s.func, s.dRole],
   )
 
   useEffect(() => {

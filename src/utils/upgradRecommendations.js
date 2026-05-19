@@ -7,6 +7,7 @@ import {
   ONLINE_PARTNER_UNIVERSITIES,
   resolveToCatalogueName,
 } from './partnerUniversityCatalog.js'
+import { profileSelectedPgIsMba } from './specialisationData.js'
 
 const TIER_PROGRAMS = {
   doctorate: { label: 'Doctorate', programs: doctorate },
@@ -52,13 +53,29 @@ function queryTokens(destinationTitle, programmeTitle, profile = {}) {
   return [...new Set(norm(raw).split(/\s+/).filter((w) => w.length > 2))]
 }
 
-function scoreProgramme(program, tokens) {
+function isDbaProgram(program) {
+  const blob = norm(`${program.credential} ${program.name} ${(program.tags || []).join(' ')}`)
+  return /\bdba\b/.test(blob)
+}
+
+function isMbaProgram(program) {
+  const cred = norm(program.credential || '')
+  if (/\bdba\b/.test(cred) && !/^mba/.test(cred)) return false
+  return /\bmba\b/.test(cred) || /^mba\b/.test(norm(program.name || ''))
+}
+
+function scoreProgramme(program, tokens, profile = {}) {
   const blob = norm(
     `${program.name} ${program.shortName} ${program.field} ${program.credential} ${program.universityLabel} ${(program.tags || []).join(' ')}`,
   )
   let score = 0
   for (const tok of tokens) {
     if (blob.includes(tok)) score += 3
+  }
+  if (profileSelectedPgIsMba(profile)) {
+    if (isDbaProgram(program)) score += 80
+    else if (isMbaProgram(program)) score += 25
+    else if (program.credentialType?.includes('Master') || /\bmba\b/.test(blob)) score += 8
   }
   if (/mba|management|leadership/.test(blob) && tokens.some((t) => /manager|management|lead|director|head/.test(t))) {
     score += 4
@@ -76,10 +93,19 @@ function scoreProgramme(program, tokens) {
   return score
 }
 
-function sortPrograms(list, tokens, key) {
+function sortPrograms(list, tokens, key, profile = {}) {
   const tie = hashStr(key)
+  const mbaPg = profileSelectedPgIsMba(profile)
   return [...list].sort((a, b) => {
-    const ds = scoreProgramme(b, tokens) - scoreProgramme(a, tokens)
+    if (mbaPg) {
+      const aDba = isDbaProgram(a)
+      const bDba = isDbaProgram(b)
+      if (aDba !== bDba) return bDba ? 1 : -1
+      const aMba = isMbaProgram(a)
+      const bMba = isMbaProgram(b)
+      if (aMba !== bMba) return bMba ? 1 : -1
+    }
+    const ds = scoreProgramme(b, tokens, profile) - scoreProgramme(a, tokens, profile)
     if (ds !== 0) return ds
     return (hashStr(a.id) % 97) - (hashStr(b.id) % 97) - (tie % 11)
   })
@@ -111,7 +137,7 @@ export function buildUpgradProgrammeSections(destinationTitle, programmeTitle, p
     if (!meta?.programs?.length) continue
 
     const take = Math.min(maxPerTier, remaining)
-    const ranked = sortPrograms(meta.programs, tokens, `${key}|${tier}`).slice(0, take)
+    const ranked = sortPrograms(meta.programs, tokens, `${key}|${tier}`, profile).slice(0, take)
     if (!ranked.length) continue
 
     sections.push({
@@ -121,7 +147,7 @@ export function buildUpgradProgrammeSections(destinationTitle, programmeTitle, p
         ...p,
         tier,
         tierLabel: meta.label,
-        relevanceScore: scoreProgramme(p, tokens),
+        relevanceScore: scoreProgramme(p, tokens, profile),
         collegeNames: (p.university || [])
           .map((id) => COLLEGE_BY_ID[id]?.name)
           .filter(Boolean),
@@ -138,7 +164,7 @@ function pickTopDegreeProgram(tokens, key, profile) {
     if (tier === 'certificates') continue
     const list = TIER_PROGRAMS[tier]?.programs
     if (!list?.length) continue
-    const top = sortPrograms(list, tokens, `${key}|${tier}`)[0]
+    const top = sortPrograms(list, tokens, `${key}|${tier}`, profile)[0]
     if (top) return { ...top, tier }
   }
   return null
@@ -200,7 +226,7 @@ export function buildPartnerDisplayCards(destinationTitle, programmeTitle, profi
 
   const degree = pickTopDegreeProgram(tokens, key, profile)
   const degreeCard = degree ? makeDegreeCard(degree) : null
-  const certificate = sortPrograms(certificates, tokens, `${key}|certificates`)[0]
+  const certificate = sortPrograms(certificates, tokens, `${key}|certificates`, profile)[0]
   const certCard = makeCertificateCard(certificate)
   const upgradCards = [degreeCard, certCard].filter(Boolean)
 

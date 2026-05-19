@@ -57,7 +57,8 @@ export function resolveSkillsSpecKey(degree, specializationTrack) {
 
 /** @returns {{ skill: string, subtext: string }[]} */
 export function getDegreeSkills(degree, specializationTrack) {
-  const degreeData = degreeSkills[degree]
+  const resolvedDegree = degree === 'Online DBA' ? 'Online MBA' : degree
+  const degreeData = degreeSkills[resolvedDegree]
   if (!degreeData) {
     const fallback = degreeSkills['Online BBA']
     return fallback?.General ?? []
