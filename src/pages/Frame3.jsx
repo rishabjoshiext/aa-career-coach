@@ -21,9 +21,8 @@ import {
   milestoneCentersForPath,
   accelCentersThreeBox,
 } from '../journey/timelineLayout.js'
-import { JOB_LISTINGS, logoKey } from '../utils/jobsData.js'
-import { JobDetailModal } from '../components/modals/JobDetailModal.jsx'
 import { formatSalaryLabelIndian } from '../utils/formatINR.js'
+import { apnaLiveJobsCountForRole, resolveMilestoneSkills } from '../data/skillsSuggestions.js'
 
 const PATHS = [
   { key: 'all', label: 'All Paths', chip: 'on' },
@@ -76,16 +75,12 @@ function MilestonePathBadge({ pk, n }) {
   }
   return null
 }
-function jobsForRole(roleName) {
-  return JOB_LISTINGS[roleName] || []
-}
-
 /** Hand-tuned PD merged with engine — always exactly 6 / 5 / 3 milestone cards. */
 function ensureCanonicalJourney(raw, engineJourney) {
   return enrichJourneyDetails(coerceJourneyToCanonicalCounts(raw, engineJourney))
 }
 
-function defaultNodeDetail() {
+function defaultNodeDetail(role = '') {
   return {
     lifestyle: 'Progressive skill and responsibility growth at this stage.',
     what: [
@@ -94,7 +89,7 @@ function defaultNodeDetail() {
       'Strengthen craft with feedback loops',
       'Document wins for promotion and interviews',
     ],
-    skills: ['Domain depth', 'Execution', 'Communication', 'Problem solving'],
+    skills: resolveMilestoneSkills(role),
   }
 }
 
@@ -103,10 +98,13 @@ function enrichJourneyDetails(parsed) {
   for (const pk of ['trad', 'fast', 'accel']) {
     out.nodes[pk] = (parsed.nodes[pk] || []).map((n, i) => {
       const d = n.detail
-      const ok = d && Array.isArray(d.what) && d.what.length >= 4 && Array.isArray(d.skills) && d.skills.length >= 4
+      const ok = d && Array.isArray(d.what) && d.what.length >= 4
+      const base = ok
+        ? { ...d, skills: resolveMilestoneSkills(n.r) }
+        : { ...defaultNodeDetail(n.r), lifestyle: d?.lifestyle || defaultNodeDetail(n.r).lifestyle }
       return {
         ...n,
-        detail: ok ? d : { ...defaultNodeDetail(), lifestyle: d?.lifestyle || defaultNodeDetail().lifestyle },
+        detail: base,
         ...(pk === 'fast' && i === 0 && !n.fastTag ? { fastTag: 'self_learning' } : {}),
         ...(pk === 'fast' && i === 1 && !n.fastTag ? { fastTag: 'upskilling' } : {}),
       }
@@ -191,7 +189,6 @@ export function Frame3() {
   const dragRef = useRef({ dr: false, lx: 0, ly: 0 })
 
   const [selectedNode, setSelectedNode] = useState(null) // {pathKey, idx}
-  const [jobModal, setJobModal] = useState({ open: false, job: null })
   const [journeyIntroLoading, setJourneyIntroLoading] = useState(true)
   const [gapLoading, setGapLoading] = useState(false)
   /** Staggered tile reveal (mirrors fasttrack_v6 buildCards skeleton + accel→fast→trad). */
@@ -345,10 +342,19 @@ export function Frame3() {
     return { node, col: PCOL[selectedNode.pathKey] || '#48DB85', pathKey: selectedNode.pathKey }
   }, [selectedNode, d])
 
-  const mdpJobs = useMemo(() => {
-    if (!selectedDetail) return []
-    return jobsForRole(selectedDetail.node.r).slice(0, 3)
-  }, [selectedDetail])
+  const mdpApnaLive = useMemo(() => {
+    if (!selectedDetail || !selectedNode) return null
+    const title = milestoneDisplayTitle(
+      selectedDetail.pathKey,
+      selectedNode.idx,
+      selectedDetail.node,
+      currentRoleFull,
+    )
+    return {
+      title,
+      count: apnaLiveJobsCountForRole(selectedDetail.node.r),
+    }
+  }, [selectedDetail, selectedNode, currentRoleFull])
 
   useEffect(() => {
     startTransition(() => setJourneyIntroLoading(true))
@@ -689,57 +695,14 @@ export function Frame3() {
                 <div className="mb-[9px] text-[8.5px] font-[800] uppercase tracking-[.1em] text-[#383838]">
                   Live jobs on Apna for this stage
                 </div>
-                <div className="space-y-[7px]">
-                  {mdpJobs.map((j) => {
-                    const lk = logoKey(j.co)
-                    const logoTxt = j.co.split(' ').map((w) => w[0]).slice(0, 3).join('').toUpperCase()
-                    return (
-                      <button
-                        key={j.title}
-                        className="group w-full cursor-pointer overflow-hidden rounded-[9px] border border-[rgba(255,255,255,.07)] bg-[rgba(255,255,255,.04)] p-[9px] text-left transition-all duration-200 hover:border-[rgba(168,85,247,.35)] hover:bg-[rgba(255,255,255,.08)] hover:translate-x-[2px]"
-                        onClick={() => setJobModal({ open: true, job: j })}
-                      >
-                        <div className="mb-[6px] flex items-center gap-2">
-                          <div
-                            className={[
-                              'flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-[6px] text-[9px] font-[900] text-white',
-                              lk === 'tcs'
-                                ? 'bg-[linear-gradient(135deg,#0F4DA8,#1a73d9)]'
-                                : lk === 'infosys'
-                                  ? 'bg-[linear-gradient(135deg,#007CC3,#0096DC)]'
-                                  : lk === 'wipro'
-                                    ? 'bg-[linear-gradient(135deg,#7B1FA2,#9C27B0)]'
-                                    : lk === 'hdfc'
-                                      ? 'bg-[linear-gradient(135deg,#004C8F,#0063b1)]'
-                                      : lk === 'icici'
-                                        ? 'bg-[linear-gradient(135deg,#B02A30,#D63939)]'
-                                        : lk === 'goldman'
-                                          ? 'bg-[linear-gradient(135deg,#7B6CFF,#a855f7)]'
-                                          : 'bg-[linear-gradient(135deg,#FF6B00,#FF8533)]',
-                            ].join(' ')}
-                          >
-                            {logoTxt}
-                          </div>
-                          <div className="min-w-0 flex-1 truncate text-[11px] font-[800] text-[#FAF9F4]">{j.co}</div>
-                          {j.posted?.includes('1d') || j.posted?.includes('2d') ? (
-                            <div className="rounded-[3px] bg-[rgba(72,219,133,.1)] px-[6px] py-[2px] text-[7.5px] font-[800] uppercase tracking-[.06em] text-[#48DB85]">
-                              New
-                            </div>
-                          ) : null}
-                        </div>
-                        <div className="mb-[5px] text-[11.5px] font-[700] leading-[1.3] text-[rgba(250,249,244,.92)]">
-                          {j.title}
-                        </div>
-                        <div className="flex flex-wrap gap-[9px] text-[9.5px] text-[rgba(250,249,244,.4)]">
-                          <span>📍 {j.loc}</span>
-                          <span>{j.mode}</span>
-                          <span className="font-[700] text-[#48DB85]">{formatSalaryLabelIndian(j.sal)}</span>
-                          {j.posted ? <span>{j.posted}</span> : null}
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
+                {mdpApnaLive ? (
+                  <>
+                    <div className="text-[14px] font-[800] capitalize text-[#FAF9F4]">{mdpApnaLive.title}</div>
+                    <div className="mt-2 text-[12px] text-[rgba(250,249,244,.65)]">
+                      Live jobs — <span className="font-[800] text-[#48DB85]">{mdpApnaLive.count}+</span>
+                    </div>
+                  </>
+                ) : null}
               </div>
             </div>
           )}
@@ -773,7 +736,6 @@ export function Frame3() {
         </div>
       </div>
 
-      <JobDetailModal open={jobModal.open} job={jobModal.job} onClose={() => setJobModal({ open: false, job: null })} />
       <RunLoadOverlay
         open={gapLoading}
         variant="gaps"

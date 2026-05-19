@@ -7,6 +7,7 @@ import { selectBestLadder, findDestinationMeta, normalizeRole, roleSimilarity } 
 import { extractRoleStem, buildStemLadder } from './roleLadders.js'
 import { filterRolesForHierarchy, inferSeniorityRank } from './seniority.js'
 import { formatRupeeMonthlyBand } from '../utils/formatINR.js'
+import { resolveMilestoneSkills } from '../data/skillsSuggestions.js'
 
 /** Future milestone cards on canvas (NOW circle is separate). */
 export const PATH_MILESTONE_COUNTS = {
@@ -532,7 +533,7 @@ function defaultNodeDetail(role, brief) {
       'Strengthen craft with feedback loops and mentorship',
       'Document wins for promotion and interviews',
     ],
-    skills: ['Domain depth', 'Execution', 'Communication', 'Problem solving'],
+    skills: resolveMilestoneSkills(role),
   }
 }
 

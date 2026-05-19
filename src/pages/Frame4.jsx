@@ -278,7 +278,8 @@ function GapCategoryCard({
   budgetEditing,
   onToggleBudgetEdit,
 }) {
-  const count = block.items?.length ?? 0
+  const nudgeCount = cat === 'dev' ? (block.nudges?.length ?? 0) : 0
+  const count = (block.items?.length ?? 0) + nudgeCount
   const isAssessable = ASSESSABLE_CATS.has(cat)
 
   return (
@@ -337,6 +338,18 @@ function GapCategoryCard({
           aria-labelledby={`gap-section-${cat}`}
         >
           <div className="px-[14px] py-[2px]">
+            {cat === 'dev' && block.nudges?.length ? (
+              <div className="space-y-2 border-b border-[rgba(0,0,0,.06)] py-[12px]">
+                {block.nudges.map((nudge) => (
+                  <p
+                    key={nudge.id}
+                    className="rounded-[9px] border border-[rgba(55,1,123,.12)] bg-[rgba(55,1,123,.05)] px-3 py-2.5 text-[12px] leading-[1.55] text-[#444]"
+                  >
+                    {nudge.text}
+                  </p>
+                ))}
+              </div>
+            ) : null}
             {block.items.map((it, idx) => {
               const assessKey = `${cat}-${idx}`
               const assessed = isAssessable ? (itemAssess[assessKey] ?? '') : null
@@ -511,7 +524,20 @@ export function Frame4() {
     return () => {
       cancelled = true
     }
-  }, [roleTitleForGaps, industryLabel, roleCard, journey, s.eduMax, s.edu, s.spec, s.func, s.dRole, s.role])
+  }, [
+    roleTitleForGaps,
+    industryLabel,
+    roleCard,
+    journey,
+    s.eduMax,
+    s.edu,
+    s.spec,
+    s.func,
+    s.dRole,
+    s.role,
+    s.english,
+    s.linkedinTier,
+  ])
 
   /** Monthly salary in ₹ — profile stores it as monthly rupees (e.g. 24000) */
   const salaryMonthly = useMemo(() => {

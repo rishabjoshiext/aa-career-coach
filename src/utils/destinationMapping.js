@@ -4,6 +4,7 @@
  */
 
 import { CAREER_AREA_ID_SET, clampToCareerArea, inferCareerAreaFromText } from '../data/potentialCareerAreas.js'
+import { careerAreaFromWorkRoleTitle } from '../data/roleCareerAreaMap.js'
 
 const INDUSTRY_IDS = CAREER_AREA_ID_SET
 
@@ -99,7 +100,11 @@ export function aspirationTargetIndustryId(s) {
     const fromLegacy = inferIndustryFromFreeText(raw)
     if (fromLegacy) return fromLegacy
   }
-  return inferIndustryFromDreamRole(s.dRole || '') || ''
+  return (
+    careerAreaFromWorkRoleTitle(s.dRole || '') ||
+    inferIndustryFromDreamRole(s.dRole || '') ||
+    ''
+  )
 }
 
 function profileSkillsText(s) {

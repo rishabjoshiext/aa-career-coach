@@ -11,6 +11,8 @@ import {
   clampToCareerArea,
 } from './potentialCareerAreas.js'
 import { inferCareerAreaFromText } from './potentialCareerAreas.js'
+import { careerAreaFromWorkRoleTitle } from './roleCareerAreaMap.js'
+import { functionalAreaFromIndustry } from './workExperienceData.js'
 import { formatCountIN, formatRupeeMonthlyBand } from '../utils/formatINR.js'
 
 export const DESTINATION_PACK_SIZE = 14
@@ -221,26 +223,80 @@ export function matchCareerAreaByRoleTitle(roleTitle) {
   return bestScore >= 0.2 ? bestArea : null
 }
 
+function careerAreaFromIndustry(industry) {
+  const ind = String(industry || '').trim()
+  if (!ind) return null
+  const func = functionalAreaFromIndustry(ind)
+  const area = FRAME1_FUNC_TO_CAREER_AREA[func] || clampToCareerArea(func)
+  if (area && CATEGORY_BY_NAME.has(area)) return area
+  return inferCareerAreaFromText(ind)
+}
+
+/**
+ * Resolve career area from role title, industry, and optional func bucket.
+ * Prefers JSON catalog match, then work-experience role map, then text inference.
+ */
+function resolveCareerAreaFromRoleAndContext({ role, industry, func }) {
+  const roleTitle = String(role || '').trim()
+  const ind = String(industry || '').trim()
+  const funcRaw = String(func || '').trim()
+
+  if (roleTitle) {
+    const fromCatalog = matchCareerAreaByRoleTitle(roleTitle)
+    if (fromCatalog) return fromCatalog
+
+    const fromMap = careerAreaFromWorkRoleTitle(roleTitle)
+    if (fromMap && CATEGORY_BY_NAME.has(fromMap)) return fromMap
+  }
+
+  const inferred = inferCareerAreaFromText(`${roleTitle} ${ind} ${funcRaw}`)
+  if (inferred && CATEGORY_BY_NAME.has(inferred)) return inferred
+
+  const fromInd = careerAreaFromIndustry(ind)
+  if (fromInd && CATEGORY_BY_NAME.has(fromInd)) return fromInd
+
+  if (funcRaw) {
+    const fromFunc = FRAME1_FUNC_TO_CAREER_AREA[funcRaw] || clampToCareerArea(funcRaw)
+    if (fromFunc && CATEGORY_BY_NAME.has(fromFunc)) return fromFunc
+  }
+
+  return null
+}
+
 /**
  * Resolve primary career area from Frame 1 profile.
+ * Priority: current role + industry → dream role → Other / general catalog.
  * @param {Record<string, any>} s
  * @returns {string}
  */
 export function resolveCareerAreaForProfile(s) {
-  const funcRaw = String(s?.func || '').trim()
-  const fromFunc = FRAME1_FUNC_TO_CAREER_AREA[funcRaw] || clampToCareerArea(funcRaw)
-  if (fromFunc && CATEGORY_BY_NAME.has(fromFunc)) return fromFunc
+  const hasWork = s?.exp && s.exp !== 'fresher'
+  const currentRole = String(s?.role || '').trim()
+  const currentInd = String(s?.ind || '').trim()
+  const currentFunc = String(s?.func || '').trim()
+  const dreamRole = String(s?.dRole || '').trim()
 
-  const anchor = getAnchorRoleTitle(s)
-  const fromRole = matchCareerAreaByRoleTitle(anchor)
-  if (fromRole) return fromRole
+  if (hasWork && (currentRole || currentInd)) {
+    const fromCurrent = resolveCareerAreaFromRoleAndContext({
+      role: currentRole,
+      industry: currentInd,
+      func: currentFunc,
+    })
+    if (fromCurrent) return fromCurrent
+  }
 
-  const inferred = inferCareerAreaFromText(`${s?.ind || ''} ${anchor} ${funcRaw}`)
-  if (inferred && CATEGORY_BY_NAME.has(inferred)) return inferred
+  if (dreamRole) {
+    const fromDream = resolveCareerAreaFromRoleAndContext({
+      role: dreamRole,
+      industry: '',
+      func: '',
+    })
+    if (fromDream) return fromDream
+  }
 
-  if (funcRaw && CAREER_AREA_ID_SET.has(funcRaw)) {
-    const mapped = FRAME1_FUNC_TO_CAREER_AREA[funcRaw] || funcRaw
-    if (CATEGORY_BY_NAME.has(mapped)) return mapped
+  if (!hasWork && currentInd) {
+    const fromInd = careerAreaFromIndustry(currentInd)
+    if (fromInd) return fromInd
   }
 
   return 'Other'

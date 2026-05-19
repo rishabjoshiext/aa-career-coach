@@ -73,6 +73,36 @@ export function buildExperienceGapBlock(
   }
 }
 
+const LINKEDIN_LOW_NETWORK_TIERS = new Set(['0–50', '50–200', '200–500'])
+
+/** Frame 1–based nudges for Personal Development (Frame 4). */
+export function buildProfilePersonalDevNudges(profile = {}) {
+  const nudges = []
+  const linkedinTier = String(profile.linkedinTier || '').trim()
+  const english = String(profile.english || '').trim()
+
+  if (linkedinTier === 'Not on LinkedIn') {
+    nudges.push({
+      id: 'linkedin-missing',
+      text: 'Having a LinkedIn profile helps recruiters view your profile as more credible and discoverable.',
+    })
+  } else if (LINKEDIN_LOW_NETWORK_TIERS.has(linkedinTier)) {
+    nudges.push({
+      id: 'linkedin-low-network',
+      text: 'Staying active on LinkedIn can improve your visibility and help recruiters notice your profile more easily.',
+    })
+  }
+
+  if (english === 'Basic') {
+    nudges.push({
+      id: 'english-basic',
+      text: 'Improving your spoken English can help you communicate more confidently and stand out in interviews and professional conversations.',
+    })
+  }
+
+  return nudges
+}
+
 /** Personal development from perdonalDev.js for the recommended degree. */
 export function buildPersonalDevGapBlock(profile = {}, destinationTitle = 'your goal', roleCard = null) {
   const dest = String(destinationTitle || 'your goal').trim() || 'your goal'
@@ -82,6 +112,7 @@ export function buildPersonalDevGapBlock(profile = {}, destinationTitle = 'your 
   return {
     imp: `${degree} · personal development`,
     cls: 'green',
+    nudges: buildProfilePersonalDevNudges(profile),
     items: pdItems.map(({ skill, subtext }) => ({
       n: skill,
       d: subtext,
