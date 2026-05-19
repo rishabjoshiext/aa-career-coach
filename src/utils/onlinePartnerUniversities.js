@@ -8,4 +8,7 @@ export {
   resolvePreferredName,
 } from './partnerUniversityCatalog.js'
 
-export { buildCollegePicksWithUpgrad as buildFallbackOnlineCollegePicks } from './upgradRecommendations.js'
+export {
+  buildCollegePicksWithUpgrad as buildFallbackOnlineCollegePicks,
+  buildPartnerDisplayCards as buildFallbackPartnerDisplayCards,
+} from './upgradRecommendations.js'

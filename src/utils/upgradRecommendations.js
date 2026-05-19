@@ -133,6 +133,111 @@ export function buildUpgradProgrammeSections(destinationTitle, programmeTitle, p
   return sections
 }
 
+function pickTopDegreeProgram(tokens, key, profile) {
+  for (const tier of tierOrderForProfile(profile)) {
+    if (tier === 'certificates') continue
+    const list = TIER_PROGRAMS[tier]?.programs
+    if (!list?.length) continue
+    const top = sortPrograms(list, tokens, `${key}|${tier}`)[0]
+    if (top) return { ...top, tier }
+  }
+  return null
+}
+
+function primaryPartnerUniversity(program) {
+  const names = universityNamesFromProgram(program)
+  for (const name of names) {
+    const resolved = resolveToCatalogueName(name) || name
+    if (ONLINE_PARTNER_UNIVERSITIES.includes(resolved)) return resolved
+  }
+  if (names[0]) return resolveToCatalogueName(names[0]) || names[0]
+  const label = String(program.universityLabel || '').trim()
+  if (!label) return null
+  return label.split(/\s*[&,]\s*/)[0].trim()
+}
+
+/** 2-column grid: row 3 starts at index 4 (0-based). */
+const PARTNER_GRID_ROW3_START = 4
+
+function makeDegreeCard(degree) {
+  const college = primaryPartnerUniversity(degree)
+  if (!college) return null
+  return {
+    id: `degree-${degree.id}`,
+    kind: 'degree',
+    title: college,
+    subtitle: `${degree.shortName || degree.name} · ${degree.duration}`,
+  }
+}
+
+function makeCertificateCard(certificate) {
+  if (!certificate) return null
+  return {
+    id: `cert-${certificate.id}`,
+    kind: 'certificate',
+    title: certificate.shortName || certificate.name,
+    subtitle: `${certificate.universityLabel} · ${certificate.duration}`,
+  }
+}
+
+function makeUniversityCard(uni) {
+  return {
+    id: `uni-${uni}`,
+    kind: 'university',
+    title: uni,
+    subtitle: 'Online / ODL · India',
+  }
+}
+
+/**
+ * Partner-university grid: catalogue colleges in rows 1–2; upGrad degree + cert in row 3
+ * when enough partners match. If fewer than 4 partners, upGrad cards move to row 1.
+ * @returns {{ id: string, kind: 'degree'|'certificate'|'university', title: string, subtitle: string }[]}
+ */
+export function buildPartnerDisplayCards(destinationTitle, programmeTitle, profile = {}, maxTotal = 8) {
+  const tokens = queryTokens(destinationTitle, programmeTitle, profile)
+  const key = `${destinationTitle}|${programmeTitle}|${profile.eduMax || profile.edu}`
+
+  const degree = pickTopDegreeProgram(tokens, key, profile)
+  const degreeCard = degree ? makeDegreeCard(degree) : null
+  const certificate = sortPrograms(certificates, tokens, `${key}|certificates`)[0]
+  const certCard = makeCertificateCard(certificate)
+  const upgradCards = [degreeCard, certCard].filter(Boolean)
+
+  const skipUni = new Set()
+  if (degreeCard) skipUni.add(norm(degreeCard.title))
+
+  const matchingNames = buildMatchingCollegePicks(destinationTitle, programmeTitle, profile, maxTotal + 6)
+  const matchingCards = []
+  for (const uni of matchingNames) {
+    if (skipUni.has(norm(uni))) continue
+    skipUni.add(norm(uni))
+    matchingCards.push(makeUniversityCard(uni))
+  }
+
+  const fillerCards = []
+  for (const uni of buildCollegePicksWithUpgrad(destinationTitle, programmeTitle, profile, maxTotal + 6)) {
+    if (skipUni.has(norm(uni))) continue
+    skipUni.add(norm(uni))
+    fillerCards.push(makeUniversityCard(uni))
+  }
+
+  const partnerCards = [...matchingCards, ...fillerCards]
+
+  let ordered = []
+  if (matchingCards.length === 0) {
+    ordered = [...upgradCards, ...partnerCards]
+  } else if (partnerCards.length >= PARTNER_GRID_ROW3_START) {
+    const lead = partnerCards.slice(0, PARTNER_GRID_ROW3_START)
+    const tail = partnerCards.slice(PARTNER_GRID_ROW3_START)
+    ordered = [...lead, ...upgradCards, ...tail]
+  } else {
+    ordered = [...upgradCards, ...partnerCards]
+  }
+
+  return ordered.slice(0, maxTotal)
+}
+
 /** Flat list of recommended programmes (tier order preserved). */
 export function buildUpgradProgrammePicks(destinationTitle, programmeTitle, profile = {}, maxCount = 10) {
   const sections = buildUpgradProgrammeSections(destinationTitle, programmeTitle, profile, {
@@ -174,11 +279,7 @@ function matchesCatalogueUni(programUniName, catalogueName) {
   return words.filter((w) => a.includes(w)).length >= 2
 }
 
-/**
- * Universities: preferred partners with matching upGrad programmes first, then other matches, then catalogue fill.
- */
-export function buildCollegePicksWithUpgrad(destinationTitle, programmeTitle, profile = {}, maxCount = 10) {
-  const programmes = buildUpgradProgrammePicks(destinationTitle, programmeTitle, profile, 12)
+function collectUniversities(programmes, maxCount, { matchingOnly = false } = {}) {
   const seen = new Set()
   const out = []
 
@@ -197,9 +298,11 @@ export function buildCollegePicksWithUpgrad(destinationTitle, programmeTitle, pr
     if (hasCourse) addUni(pref)
   }
 
-  for (const pref of PREFERRED_PARTNER_UNIVERSITIES) {
-    if (out.length >= maxCount) break
-    if (!seen.has(resolveToCatalogueName(pref) || pref)) addUni(pref)
+  if (!matchingOnly) {
+    for (const pref of PREFERRED_PARTNER_UNIVERSITIES) {
+      if (out.length >= maxCount) break
+      if (!seen.has(resolveToCatalogueName(pref) || pref)) addUni(pref)
+    }
   }
 
   for (const p of programmes) {
@@ -211,10 +314,32 @@ export function buildCollegePicksWithUpgrad(destinationTitle, programmeTitle, pr
     }
   }
 
+  return { out: out.slice(0, maxCount), seen }
+}
+
+/** Partner universities with a relevant upGrad programme for this profile. */
+export function buildMatchingCollegePicks(destinationTitle, programmeTitle, profile = {}, maxCount = 12) {
+  const programmes = buildUpgradProgrammePicks(destinationTitle, programmeTitle, profile, 12)
+  return collectUniversities(programmes, maxCount, { matchingOnly: true }).out
+}
+
+/**
+ * Universities: preferred partners with matching upGrad programmes first, then other matches, then catalogue fill.
+ */
+export function buildCollegePicksWithUpgrad(destinationTitle, programmeTitle, profile = {}, maxCount = 10) {
+  const programmes = buildUpgradProgrammePicks(destinationTitle, programmeTitle, profile, 12)
+  const { out, seen } = collectUniversities(programmes, maxCount)
+
   const key = `${destinationTitle}|${programmeTitle}`
   const start = hashStr(key) % ONLINE_PARTNER_UNIVERSITIES.length
   for (let i = 0; i < ONLINE_PARTNER_UNIVERSITIES.length && out.length < maxCount; i += 1) {
-    addUni(ONLINE_PARTNER_UNIVERSITIES[(start + i) % ONLINE_PARTNER_UNIVERSITIES.length])
+    const resolved = resolveToCatalogueName(
+      ONLINE_PARTNER_UNIVERSITIES[(start + i) % ONLINE_PARTNER_UNIVERSITIES.length],
+    )
+    if (resolved && !seen.has(resolved)) {
+      seen.add(resolved)
+      out.push(resolved)
+    }
   }
 
   return out.slice(0, maxCount)
