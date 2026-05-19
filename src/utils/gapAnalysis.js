@@ -1,7 +1,36 @@
 import { GAPS_BY_ROLE } from './gapsData.js'
 import { getDegreePersonalDev } from './degreePersonalDevMap.js'
-import { getDegreeSkills, resolveSkillsSpecKey } from './degreeSkillsMap.js'
+import { getDegreeSkills } from './degreeSkillsMap.js'
 import { inferFallbackDegreeTrack, profileEduLevel } from './specialisationData.js'
+
+/** Strip degree-specific wording from Frame 4 skill / personal-dev copy. */
+function generalizeGapSubtext(text) {
+  return String(text || '')
+    .replace(
+      /Join LinkedIn groups like 'MBA Professionals India' and your university's alumni network/gi,
+      'Join relevant LinkedIn groups and professional networks',
+    )
+    .replace(/your MBA learnings/gi, 'your learnings')
+    .replace(
+      /Search your university name on LinkedIn, filter by graduation year and specialization to find alumni in roles you aspire to — they convert at the highest rate for mentorship calls/gi,
+      'Search LinkedIn for professionals in roles you aspire to — warm outreach often converts best for mentorship calls',
+    )
+    .replace(
+      /Find BCom graduates from your institution who are now in finance roles and request 10-minute advice calls — same-degree alumni are the single highest-converting source of career referrals/gi,
+      'Reach out to professionals in your target field for short advice calls — referrals from your network often convert best',
+    )
+    .replace(/\b(Online\s+)?(MBA|BBA|BCA|BCom|MCA|MA|MCom|MSc)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+function generalizeGapSkillLabel(skill) {
+  return String(skill || '')
+    .replace(/\bMBA\s+Alumni\b/gi, 'Alumni')
+    .replace(/\b(Online\s+)?(MBA|BBA|BCA|BCom|MCA)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
 
 function isAccelDegreeNode(node) {
   const title = String(node?.r || '')
@@ -106,16 +135,16 @@ export function buildProfilePersonalDevNudges(profile = {}) {
 /** Personal development from perdonalDev.js for the recommended degree. */
 export function buildPersonalDevGapBlock(profile = {}, destinationTitle = 'your goal', roleCard = null) {
   const dest = String(destinationTitle || 'your goal').trim() || 'your goal'
-  const { degree, specializationTrack } = inferFallbackDegreeTrack(dest, roleCard, profile)
+  const { degree } = inferFallbackDegreeTrack(dest, roleCard, profile)
   const pdItems = getDegreePersonalDev(degree)
 
   return {
-    imp: `${degree} · personal development`,
+    imp: 'Personal development',
     cls: 'green',
     nudges: buildProfilePersonalDevNudges(profile),
     items: pdItems.map(({ skill, subtext }) => ({
-      n: skill,
-      d: subtext,
+      n: generalizeGapSkillLabel(skill) || skill,
+      d: generalizeGapSubtext(subtext),
     })),
   }
 }
@@ -141,19 +170,14 @@ export function shouldShowMbaInvestment(profile = {}, destinationTitle = 'your g
 export function buildSkillsGapBlock(profile = {}, destinationTitle = 'your goal', roleCard = null) {
   const dest = String(destinationTitle || 'your goal').trim() || 'your goal'
   const { degree, specializationTrack } = inferFallbackDegreeTrack(dest, roleCard, profile)
-  const skillsSpecKey = resolveSkillsSpecKey(degree, specializationTrack)
   const skills = getDegreeSkills(degree, specializationTrack)
-  const specNote = skillsSpecKey === 'General' ? 'General track' : skillsSpecKey
 
   return {
-    imp: `${degree} · ${specializationTrack}`,
+    imp: 'Skills & tools',
     cls: 'amber',
-    recommendedDegree: degree,
-    specializationTrack,
-    skillsSpecKey: specNote,
     items: skills.map(({ skill, subtext }) => ({
       n: skill,
-      d: subtext,
+      d: generalizeGapSubtext(subtext),
     })),
   }
 }

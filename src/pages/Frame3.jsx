@@ -1,7 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, startTransition } from 'react'
 import { useNavigate } from 'react-router-dom'
-import jsPDF from 'jspdf'
-import { captureJourneyElement } from '../utils/exportJourneyPdf.js'
 import { Button } from '../components/ui/Button.jsx'
 import { useAppState } from '../hooks/appState.jsx'
 import { RunLoadOverlay } from '../components/loaders/RunLoadOverlay.jsx'
@@ -401,46 +399,6 @@ export function Frame3() {
     }
   }, [journeyIntroLoading, d])
 
-  const downloadJourneyPdf = async () => {
-    const el = canvasRef.current
-    if (!el) return
-    const prev = { filter, zoom: { ...zoom } }
-    try {
-      for (const t of staggerTimersRef.current) window.clearTimeout(t)
-      staggerTimersRef.current = []
-      setSkeletonKeys(new Set())
-      setFilter('all')
-      setZoom({ s: 1, tx: 0, ty: 0, target_s: 1, target_tx: 0, target_ty: 0 })
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
-      await new Promise((r) => window.setTimeout(r, 400))
-
-      const canvas = await captureJourneyElement(el)
-      const imgData = canvas.toDataURL('image/png')
-      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-      const w = pdf.internal.pageSize.getWidth()
-      const h = pdf.internal.pageSize.getHeight()
-      const ratio = canvas.width / canvas.height
-      let targetW = w - 10
-      let targetH = targetW / ratio
-      if (targetH > h - 10) {
-        targetH = h - 10
-        targetW = targetH * ratio
-      }
-      pdf.addImage(imgData, 'PNG', (w - targetW) / 2, (h - targetH) / 2, targetW, targetH)
-      pdf.save(`journey-${roleTitle.replace(/\s+/g, '-').toLowerCase()}.pdf`)
-    } catch (err) {
-      console.error('Failed to export journey PDF', err)
-    } finally {
-      setFilter(prev.filter)
-      setZoom({
-        ...prev.zoom,
-        target_s: prev.zoom.s,
-        target_tx: prev.zoom.tx,
-        target_ty: prev.zoom.ty,
-      })
-    }
-  }
-
   return (
     <section className="absolute inset-0 overflow-hidden bg-[#0C0C0C] px-6 pb-3 pt-5 text-[#FAF9F4]">
       <div
@@ -476,13 +434,6 @@ export function Frame3() {
             ))}
 
             <div className="ml-auto flex items-center gap-[6px]">
-              <button
-                className="inline-flex items-center gap-2 rounded-[10px] border-[1.5px] border-[rgba(55,1,123,.45)] bg-[linear-gradient(135deg,rgba(248,245,255,.14)_0%,rgba(117,4,255,.22)_100%)] px-3 py-[8px] text-[12px] font-[800] text-[#f5e9ff] shadow-[0_2px_12px_rgba(117,4,255,.18)] transition hover:border-[rgba(168,85,247,.55)] hover:bg-[linear-gradient(135deg,rgba(248,245,255,.2)_0%,rgba(117,4,255,.32)_100%)] hover:text-white"
-                onClick={downloadJourneyPdf}
-                title="Download journey graph as PDF"
-              >
-                ⬇ Download plan
-              </button>
               <span className="text-[10px] font-[600] text-[rgba(250,249,244,.25)]">{Math.round(zoom.s * 100)}%</span>
               <button
                 className="flex h-7 w-7 items-center justify-center rounded-[7px] border border-[rgba(255,255,255,.1)] bg-[rgba(255,255,255,.04)] text-[14px] font-[700] text-[rgba(250,249,244,.6)] transition-all duration-200 hover:bg-[rgba(255,255,255,.1)] hover:text-[#FAF9F4]"

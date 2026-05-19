@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAppState } from '../../hooks/appState.jsx'
 import { profileMonthlySalaryLabel, resolveUserJourney } from '../../utils/resolveJourney.js'
 
@@ -7,7 +6,6 @@ import { profileMonthlySalaryLabel, resolveUserJourney } from '../../utils/resol
  * Bottom sheet (mp-drawer) — always shows the accelerated path, per fasttrack_v6 HTML.
  */
 export function AcceleratedPathDrawer({ open, onClose }) {
-  const nav = useNavigate()
   const { s, selRole, selIndustry } = useAppState()
 
   const { journey, destinationTitle } = useMemo(
@@ -112,8 +110,8 @@ export function AcceleratedPathDrawer({ open, onClose }) {
           })}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[rgba(255,255,255,.05)] bg-[rgba(0,0,0,.2)] px-[22px] py-3.5 pb-[18px]">
-          <p className="max-w-[420px] text-[11px] leading-[1.45] text-[rgba(255,255,255,.55)]">
+        <div className="border-t border-[rgba(255,255,255,.05)] bg-[rgba(0,0,0,.2)] px-[22px] py-3.5 pb-[18px]">
+          <p className="text-[11px] leading-[1.45] text-[rgba(255,255,255,.55)]">
             <strong className="font-[800] text-[#48DB85]">{accelYears} years</strong> on the accelerated path
             {yearsSaved > 0 ? (
               <>
@@ -123,16 +121,6 @@ export function AcceleratedPathDrawer({ open, onClose }) {
             ) : null}{' '}
             · Path data verified
           </p>
-          <button
-            type="button"
-            className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[8px] border-0 bg-[#37017B] px-4 py-2 text-[11.5px] font-[700] text-white transition-all duration-200 hover:-translate-y-px hover:bg-[#7504FF]"
-            onClick={() => {
-              onClose()
-              nav('/3')
-            }}
-          >
-            Compare all 3 paths →
-          </button>
         </div>
       </div>
     </div>

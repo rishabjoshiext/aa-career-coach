@@ -130,16 +130,7 @@ export function Frame6() {
           ))}
         </div>
 
-        {/* Live pill */}
-        <div className="mb-5 inline-flex max-w-full items-center gap-2 rounded-[20px] border border-[rgba(0,0,0,.07)] bg-[rgba(0,0,0,.03)] px-[13px] py-[6px]">
-          <span className="h-[6px] w-[6px] flex-shrink-0 animate-pulse rounded-full bg-[#22c55e]" />
-          <p className="text-[11px] font-[600] leading-snug text-[#555]">
-            <strong className="text-[#0C0C0C]">1L+</strong> learners coached toward roles like{' '}
-            <strong className="text-[#37017B]">{destinationTitle}</strong>
-            <span className="text-[#999]"> · </span>
-            <span className="text-[#666]">{liveStats.reviewers.toLocaleString('en-IN')} peers reviewing paths this week</span>
-          </p>
-        </div>
+      
 
         {/* Story grid */}
         <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -167,11 +158,6 @@ export function Frame6() {
                 </div>
                 <div className="text-[13px] font-[700] text-[#0C0C0C]">{story.n}</div>
                 <div className="mb-2 text-[10px] text-[#bbb]">📍 {story.c}</div>
-                <div className="mb-2 flex flex-wrap items-center gap-1">
-                  <span className="rounded-[5px] bg-[rgba(0,0,0,.04)] px-[7px] py-[3px] text-[9px] font-[600] text-[#777]">{story.f}</span>
-                  <span className="text-[11px] font-[900] text-[#37017B]">→</span>
-                  <span className="rounded-[5px] bg-[rgba(55,1,123,.07)] px-[7px] py-[3px] text-[9px] font-[800] text-[#37017B]">{story.t}</span>
-                </div>
                 <div className="text-[22px] font-[900] leading-none text-[#37017B]">{story.h}</div>
                 <div className="mb-2 text-[9px] text-[#bbb]">salary hike · {story.ti}</div>
                 <blockquote className="mb-3 flex-1 border-l-2 border-[rgba(55,1,123,.14)] pl-2 text-[10.5px] italic leading-[1.55] text-[#555]">
@@ -232,11 +218,6 @@ export function Frame6() {
               >
                 Close
               </button>
-            </div>
-            <div className="mb-4 flex flex-wrap items-center gap-1 text-[12px]">
-              <span className="rounded-[6px] bg-[rgba(0,0,0,.05)] px-2 py-1 text-[11px] font-[600] text-[#555]">{selected.f}</span>
-              <span className="font-[900] text-[#37017B]">→</span>
-              <span className="rounded-[6px] bg-[rgba(55,1,123,.08)] px-2 py-1 text-[11px] font-[800] text-[#37017B]">{selected.t}</span>
             </div>
             <p className="mb-4 text-[13px] font-[800] text-[#37017B]">
               {selected.h} <span className="text-[12px] font-[600] text-[#888]">· {selected.ti}</span>
