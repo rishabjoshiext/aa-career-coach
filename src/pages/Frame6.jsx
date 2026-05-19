@@ -105,7 +105,7 @@ export function Frame6() {
         </button>
 
         <div className="mb-2 text-[27px] leading-[1.2] [font-family:'DM Serif Display',serif]">
-        Career growth stories that feel<strong> Familiar.</strong> 
+        Career journeys from people like <strong>You.</strong>
         </div>
         <p className="mb-6 max-w-[720px] text-[13px] leading-[1.55] text-[#555]">
         Professionals with backgrounds like <strong>yours</strong> who chose a structured path and achieved meaningful career growth. {' '} <br></br>

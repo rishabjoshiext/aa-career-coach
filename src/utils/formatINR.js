@@ -52,6 +52,34 @@ export function formatRupeeMonthlyBand(lo, hi) {
   return formatRupeeBand(lo, hi, { monthly: true })
 }
 
+/**
+ * Annual LPA (lakhs) from ROI chart "monthlyK" (thousands of ₹/month).
+ * Matches roiModel.annualLacsFromMonthlyK.
+ */
+export function lpaFromMonthlyK(monthlyK) {
+  const k = Number(monthlyK)
+  if (!Number.isFinite(k) || k <= 0) return 0
+  return Math.round((k * 12) / 100 * 10) / 10
+}
+
+/** Compact LPA label for PDF / cards — ₹18.5L, ₹24L */
+export function formatSalaryCompact(lacs) {
+  const n = Number(lacs)
+  if (!Number.isFinite(n) || n <= 0) return '—'
+  const rounded = Math.round(n * 10) / 10
+  const core = rounded % 1 === 0 ? String(Math.round(rounded)) : rounded.toFixed(1)
+  return `₹${core}L`
+}
+
+/** Year-5 (or horizon) expected annual band: projected LPA ± ₹1L */
+export function expectedSalaryBandLpa(monthlyKAtYear, spreadLacs = 1) {
+  const center = lpaFromMonthlyK(monthlyKAtYear)
+  if (center <= 0) return '—'
+  const lo = Math.max(0.1, Math.round((center - spreadLacs) * 10) / 10)
+  const hi = Math.round((center + spreadLacs) * 10) / 10
+  return `${formatSalaryCompact(lo)} – ${formatSalaryCompact(hi)}`
+}
+
 /** Cumulative budget in lakhs for ROI copy — ₹4.5 L */
 export function formatBudgetLacs(lacs) {
   const n = Number(lacs)

@@ -66,7 +66,7 @@ export function buildExperienceGapBlock(
   for (const node of accelNodes) {
     if (isAccelDegreeNode(node) && !degreeRowAdded) {
       items.push({
-        n: String(node.r || '').trim() || `${degree} (work + study)`,
+        n: 'Essential Skills and Degree',
         d: `Gap: complete ${degreeLabel} to progress through this step.`,
         pill: 'crit',
       })
@@ -81,7 +81,7 @@ export function buildExperienceGapBlock(
 
   if (!degreeRowAdded) {
     items.push({
-      n: `${degree} · work + study`,
+      n: 'Essential Skills and Degree',
       d: `Gap: enrol in ${degreeLabel} without a career break.`,
       pill: 'crit',
     })
@@ -139,7 +139,7 @@ export function buildPersonalDevGapBlock(profile = {}, destinationTitle = 'your 
   const pdItems = getDegreePersonalDev(degree)
 
   return {
-    imp: 'Personal development',
+    imp: 'Additional personal enhancements based on your profile',
     cls: 'green',
     nudges: buildProfilePersonalDevNudges(profile),
     items: pdItems.map(({ skill, subtext }) => ({
@@ -173,7 +173,7 @@ export function buildSkillsGapBlock(profile = {}, destinationTitle = 'your goal'
   const skills = getDegreeSkills(degree, specializationTrack)
 
   return {
-    imp: 'Skills & tools',
+    imp: 'Must have skills and tools for your career',
     cls: 'amber',
     items: skills.map(({ skill, subtext }) => ({
       n: skill,

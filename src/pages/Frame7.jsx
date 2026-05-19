@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button.jsx'
 import { useAppState } from '../hooks/appState.jsx'
@@ -8,6 +8,9 @@ import { flattenIndustryRoles, INDUSTRIES } from '../utils/fasttrackData.js'
 import { buildFallbackPartnerDisplayCards } from '../utils/onlinePartnerUniversities.js'
 import { buildFallbackSpec } from '../utils/specialisationData.js'
 import { formatLPA, formatRupeeMonthly, formatSalaryLabelIndian } from '../utils/formatINR.js'
+import { CareerReportPDF } from '../components/careerReport/CareerReportPDF.jsx'
+import { useCareerReportData } from '../hooks/useCareerReportData.js'
+import { downloadCareerReportPdf } from '../utils/pdfGenerator.js'
 
 const PATH_LABELS = [
   { key: 'trad', label: 'Traditional' },
@@ -58,6 +61,9 @@ export function Frame7() {
   const [loading, setLoading] = useState(true)
   const [partnerCards, setPartnerCards] = useState([])
   const [collegesLoading, setCollegesLoading] = useState(false)
+  const [roadmapPdfLoading, setRoadmapPdfLoading] = useState(false)
+  const reportRef = useRef(null)
+  const reportData = useCareerReportData()
 
   const pdKey = resolvePdRole(selRole)
   const destinationTitle = (selRole && String(selRole).trim()) || 'your goal'
@@ -134,6 +140,24 @@ export function Frame7() {
     partnerCards.find((c) => c.kind === 'degree')?.title ||
     spec?.anchorUni ||
     '—'
+
+  const handleDownloadRoadmap = async () => {
+    if (!spec || !reportData || roadmapPdfLoading || !reportRef.current) return
+    setRoadmapPdfLoading(true)
+    try {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+      const slug =
+        (reportData.displayName || 'user').replace(/\s+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '') || 'user'
+      await downloadCareerReportPdf({
+        rootEl: reportRef.current,
+        fileName: `career-transformation-pass-${slug}.pdf`,
+      })
+    } catch (err) {
+      console.error('Failed to generate career roadmap PDF', err)
+    } finally {
+      setRoadmapPdfLoading(false)
+    }
+  }
 
   return (
     <section className="absolute inset-0 overflow-y-auto px-9 pb-10 pt-7" data-app-page-scroll>
@@ -254,6 +278,22 @@ export function Frame7() {
                     </div>
                   ))}
                 </div>
+                <div className="mt-4 border-t border-dashed border-[rgba(0,0,0,.1)] pt-4">
+                  <div className="mb-1 text-[14px] font-[700] text-[#0C0C0C]">Download roadmap</div>
+                  <p className="mb-3 text-[11px] leading-[1.5] text-[#666]">
+                    Get your Career Transformation Pass — profile summary, gaps, 5-year salary growth, and your
+                    accelerated path from Frame 3.
+                  </p>
+                  <Button
+                    type="button"
+                    className="w-full rounded-[10px] bg-[#37017B] text-white shadow-[0_4px_14px_rgba(55,1,123,.22)] hover:bg-[#5b21b6] disabled:opacity-50"
+                    disabled={roadmapPdfLoading}
+                    onClick={handleDownloadRoadmap}
+                  >
+                    {roadmapPdfLoading ? 'Generating PDF…' : '⬇ Download Career Pass'}
+                  </Button>
+                </div>
+
               </div>
 
               <div className="rounded-[13px] border border-[rgba(0,0,0,.07)] bg-white p-4 shadow-[0_1px_10px_rgba(0,0,0,.04)]">
@@ -374,6 +414,8 @@ export function Frame7() {
           </div>
         </div>
       </div>
+
+      <CareerReportPDF ref={reportRef} data={reportData} />
     </section>
   )
 }
