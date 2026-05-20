@@ -1,17 +1,18 @@
 import { forwardRef, Fragment } from 'react'
+import apnaAdvantageLogo from '../../assets/apna-advantage-logo.png'
 import './pdfStyles.css'
 
 function ReportHeader() {
   return (
     <div className="cr-header">
       <div className="cr-brand">
-        <div className="cr-brand-icon" aria-hidden>
-          A
-        </div>
-        <div>
-          <div className="cr-brand-text">apna advantage</div>
-          <div className="cr-brand-sub">Your Degree. Your Advantage.</div>
-        </div>
+        <img
+          src={apnaAdvantageLogo}
+          alt="apnaadvantage"
+          className="cr-brand-logo"
+          width={158}
+          height={38}
+        />
       </div>
     </div>
   )
@@ -38,8 +39,10 @@ function PathTimeline({ steps }) {
         <Fragment key={`${step.title}-${i}`}>
           {i > 0 ? (
             <div className="cr-path-connector" aria-hidden>
-              <span className="cr-path-dotted-line" />
-              <span className="cr-path-chevron">›</span>
+              <span className="cr-path-line" />
+              <svg className="cr-path-arrow" viewBox="0 0 12 12" width="12" height="12" aria-hidden>
+                <path d="M2 2 L9 6 L2 10 Z" fill="#7c3aed" />
+              </svg>
             </div>
           ) : null}
           <div className="cr-path-step">
@@ -59,7 +62,6 @@ export const CareerReportPDF = forwardRef(function CareerReportPDF({ data }, ref
   const {
     displayName,
     firstName,
-    transformationBadge,
     destinationTitle,
     industryLabel,
     gapRows,
@@ -84,7 +86,6 @@ export const CareerReportPDF = forwardRef(function CareerReportPDF({ data }, ref
 
         <div className="cr-profile-card">
           <h2 className="cr-profile-name">{displayName}</h2>
-          {transformationBadge ? <p className="cr-transform-badge">{transformationBadge}</p> : null}
           <p className="cr-profile-sub">You are on your way to a better future.</p>
           <div className="cr-meta-row">
             <span className="cr-meta-label">Future Role</span>

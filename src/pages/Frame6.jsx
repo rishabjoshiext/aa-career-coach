@@ -130,7 +130,10 @@ export function Frame6() {
           ))}
         </div>
 
-      
+        <p className="mb-6 max-w-[900px] text-[13px] leading-[1.55] text-[#555]">
+          These are real stories from learners who invested in their growth, built in-demand skills, and moved closer to
+          higher-paying roles, stronger career opportunities, and long-term professional success.
+        </p>
 
         {/* Story grid */}
         <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">

@@ -162,7 +162,6 @@ export function useCareerReportData() {
       destinationTitle,
       industryLabel,
       specTitle: spec.title,
-      transformationBadge: `Transformation Incoming — ${formatPathYearsLabel(pathYears)}`,
       gapRows: gapSummaryRows(gaps),
       pathSteps,
       roi: {
