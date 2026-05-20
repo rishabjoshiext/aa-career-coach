@@ -53,6 +53,9 @@ export const CURATED_LADDERS = {
     id: 'sales',
     name: 'Sales',
     roles: [
+      'Sales Trainee',
+      'BDR / SDR',
+      'Inside Sales Representative',
       'Sales Executive',
       'Business Development Executive',
       'Account Manager',
@@ -233,6 +236,7 @@ export const CATEGORY_TO_CURATED = {
   'Software Development': 'software_engineering',
   IT: 'software_engineering',
   Marketing: 'marketing',
+  Sales: 'sales',
   'Digital Marketing': 'marketing',
   Finance: 'finance',
   'Banking & Insurance': 'banking_insurance',

@@ -4,8 +4,8 @@
  */
 
 import { selectBestLadder, findDestinationMeta, normalizeRole, roleSimilarity } from './roleMatcher.js'
-import { extractRoleStem, buildStemLadder } from './roleLadders.js'
-import { filterRolesForHierarchy, inferSeniorityRank } from './seniority.js'
+import { extractRoleStem, buildStemLadder, getLadderForCategory } from './roleLadders.js'
+import { filterRolesForHierarchy, inferSeniorityRank, isGenericCurrentRole } from './seniority.js'
 import { formatRupeeMonthlyBand } from '../utils/formatINR.js'
 import { resolveMilestoneSkills } from '../data/skillsSuggestions.js'
 
@@ -190,6 +190,49 @@ function roleKey(r) {
   return normalizeRole(r).toLowerCase()
 }
 
+/** Block auto-generated placeholder titles (e.g. "Sales Professional 3"). */
+function isSyntheticPlaceholderRole(role) {
+  return /\bprofessional\s+\d+\b/i.test(normalizeRole(role))
+}
+
+/**
+ * @param {string[]} roles
+ */
+function withoutPlaceholderRoles(roles) {
+  return roles.filter((r) => !isSyntheticPlaceholderRole(r))
+}
+
+/**
+ * Backfill missing milestones from curated / JSON ladders — never generic "Professional N".
+ * @param {number} need
+ * @param {string} targetRole
+ * @param {string} categoryName
+ * @param {Set<string>} usedKeys
+ */
+function catalogRoleBackfill(need, targetRole, categoryName, usedKeys) {
+  if (need <= 0) return []
+  const hints = [
+    categoryName,
+    categoryName === 'Sales' ? 'Other' : '',
+    categoryName === 'Other' ? 'Sales' : '',
+  ].filter(Boolean)
+
+  const collected = []
+  for (const hint of hints) {
+    const lad = getLadderForCategory(hint)
+    if (lad?.roles?.length) collected.push(...lad.roles)
+  }
+
+  const candidates = withoutPlaceholderRoles(
+    filterRolesForHierarchy(uniquePreserveOrder(collected), 'Current Role', targetRole),
+  ).filter((r) => {
+    const k = roleKey(r)
+    return k && k !== roleKey(targetRole) && !usedKeys.has(k)
+  })
+
+  return pickUniqueEvenly(candidates, need)
+}
+
 /** @param {string[]} roles */
 export function uniquePreserveOrder(roles) {
   const seen = new Set()
@@ -210,8 +253,13 @@ export function uniquePreserveOrder(roles) {
 export function buildProgressionPool(ladder, currentIdx, targetIdx, currentRole, targetRole) {
   const all = ladder.roles.map(normalizeRole)
   const target = normalizeRole(targetRole)
-  const from = Math.min(currentIdx, targetIdx)
-  const to = Math.max(currentIdx, targetIdx)
+  let from = Math.min(currentIdx, targetIdx)
+  let to = Math.max(currentIdx, targetIdx)
+
+  if (isGenericCurrentRole(currentRole) || from === to) {
+    from = 0
+    to = Math.max(to, Math.min(ladder.roles.length - 1, targetIdx + 2))
+  }
 
   let windowStart = from
   let windowEnd = to
@@ -238,10 +286,10 @@ export function buildProgressionPool(ladder, currentIdx, targetIdx, currentRole,
     currentRole,
     targetRole,
   ).filter((r) => roleKey(r) !== roleKey(target))
-  pool = uniquePreserveOrder([...pool, ...synthetics])
-  pool = filterRolesForHierarchy(pool, currentRole, targetRole)
+  pool = withoutPlaceholderRoles(uniquePreserveOrder([...pool, ...synthetics]))
+  pool = withoutPlaceholderRoles(filterRolesForHierarchy(pool, currentRole, targetRole))
   pool.push(target)
-  return pool
+  return withoutPlaceholderRoles(pool)
 }
 
 /**
@@ -299,26 +347,48 @@ function fillUniqueMiddle(middle, need, targetRole) {
   return sortBySeniority(pickUniqueEvenly(out, need))
 }
 
-/** Guarantee exactly `count` roles (target last); synthesize ladder steps if deduping shrinks the list. */
-function ensureRoleListCount(roles, count, targetRole, candidates = []) {
+/** Guarantee exactly `count` roles (target last); backfill from catalog ladders — no placeholder titles. */
+function ensureRoleListCount(roles, count, targetRole, candidates = [], categoryName = '') {
   const target = normalizeRole(targetRole)
-  let out = uniquePreserveOrder(roles).filter((r) => roleKey(r) !== roleKey(target))
+  let out = withoutPlaceholderRoles(uniquePreserveOrder(roles)).filter((r) => roleKey(r) !== roleKey(target))
   out.push(target)
 
   let guard = 0
   while (out.length < count && guard < 24) {
     guard += 1
     const needMiddle = Math.max(0, count - 1)
-    const mids = fillUniqueMiddle([...out.slice(0, -1), ...candidates], needMiddle, target)
-    out = uniquePreserveOrder([...mids, target])
+    const mids = fillUniqueMiddle(
+      withoutPlaceholderRoles([...out.slice(0, -1), ...candidates]),
+      needMiddle,
+      target,
+    )
+    out = withoutPlaceholderRoles(uniquePreserveOrder([...mids, target]))
+
+    if (out.length < count) {
+      const used = new Set(out.map(roleKey))
+      const backfill = catalogRoleBackfill(count - out.length + 1, target, categoryName, used)
+      for (const r of backfill) {
+        if (out.length >= count) break
+        const k = roleKey(r)
+        if (!k || used.has(k) || k === roleKey(target)) continue
+        used.add(k)
+        out.splice(out.length - 1, 0, normalizeRole(r))
+      }
+    }
+
     if (out.length < count) {
       const stem = extractRoleStem(target)
-      const tier = out.length
-      out.splice(out.length - 1, 0, normalizeRole(`${stem} Professional ${tier}`))
+      const extras = withoutPlaceholderRoles(buildStemLadder(stem, target, count + 4))
+      for (const r of extras) {
+        if (out.length >= count) break
+        const k = roleKey(r)
+        if (!k || k === roleKey(target) || out.some((x) => roleKey(x) === k)) continue
+        out.splice(out.length - 1, 0, normalizeRole(r))
+      }
     }
   }
 
-  return out.slice(0, count)
+  return withoutPlaceholderRoles(out).slice(0, count)
 }
 
 /** Ensure milestone roles ascend in seniority (accel upskill node stays first). */
@@ -341,14 +411,16 @@ function orderMilestoneRoles(roles, mode) {
  * @param {string} targetRole
  * @param {string} [ladderId]
  */
-export function samplePathRoles(pool, count, mode, currentRole, targetRole, ladderId = '') {
+export function samplePathRoles(pool, count, mode, currentRole, targetRole, ladderId = '', categoryName = '') {
   const target = normalizeRole(targetRole)
   const current = normalizeRole(currentRole)
 
-  let candidates = filterRolesForHierarchy(
-    uniquePreserveOrder(pool).filter((r) => roleKey(r) !== roleKey(current)),
-    currentRole,
-    targetRole,
+  let candidates = withoutPlaceholderRoles(
+    filterRolesForHierarchy(
+      uniquePreserveOrder(pool).filter((r) => roleKey(r) !== roleKey(current)),
+      currentRole,
+      targetRole,
+    ),
   ).filter((r) => roleKey(r) !== roleKey(target))
 
   if (mode === 'accelerated') {
@@ -365,14 +437,14 @@ export function samplePathRoles(pool, count, mode, currentRole, targetRole, ladd
     }
     if (count === 3) {
       return orderMilestoneRoles(
-        ensureRoleListCount([first, normalizeRole(mid), target], count, target, candidates),
+        ensureRoleListCount([first, normalizeRole(mid), target], count, target, candidates, categoryName),
         mode,
       )
     }
 
     const inner = fillUniqueMiddle(candidates, count - 2, target)
     return orderMilestoneRoles(
-      ensureRoleListCount([first, ...inner, target], count, target, candidates),
+      ensureRoleListCount([first, ...inner, target], count, target, candidates, categoryName),
       mode,
     )
   }
@@ -384,7 +456,7 @@ export function samplePathRoles(pool, count, mode, currentRole, targetRole, ladd
   }
 
   return orderMilestoneRoles(
-    ensureRoleListCount([...middle.slice(0, middleCount), target], count, target, candidates),
+    ensureRoleListCount([...middle.slice(0, middleCount), target], count, target, candidates, categoryName),
     mode,
   )
 }
@@ -503,7 +575,7 @@ export function generateCareerProgression(input) {
   for (const pathKey of paths) {
     const count = PATH_MILESTONE_COUNTS[pathKey]
     const mode = pathKey
-    const roles = samplePathRoles(pool, count, mode, currentRole, targetRole, ladder.id)
+    const roles = samplePathRoles(pool, count, mode, currentRole, targetRole, ladder.id, categoryName)
     const years = yearsForPath(count, yearTotals[pathKey], pathKey)
     const salaries = buildIncreasingSalaries(count, currentMonthly, min, max)
 

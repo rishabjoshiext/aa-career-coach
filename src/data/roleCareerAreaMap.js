@@ -1162,9 +1162,35 @@ export const ROLE_TITLE_TO_CAREER_AREA = {
   "Office Manager": "Other"
 }
 
+/** Humanities / arts titles that should map to new JSON-backed areas (not legacy Education/Marketing). */
+const HUMANITIES_TITLE_OVERRIDES = {
+  'Primary School Teacher': 'Education & Teaching',
+  'Secondary School Teacher': 'Education & Teaching',
+  'Senior Secondary Teacher': 'Education & Teaching',
+  'School Teacher': 'Education & Teaching',
+  'Art Teacher': 'Education & Teaching',
+  'Music Teacher': 'Education & Teaching',
+  'Research Fellow': 'Academic Research',
+  'Senior Research Fellow': 'Academic Research',
+  'Content Writer': 'Content & Creative Writing',
+  'Senior Content Writer': 'Content & Creative Writing',
+  'Freelance Content Writer': 'Content & Creative Writing',
+  Journalist: 'Journalism & Media',
+  'Digital Journalist': 'Journalism & Media',
+  'Photo Journalist': 'Journalism & Media',
+  Psychologist: 'Psychology & Counselling',
+  'Clinical Psychologist': 'Psychology & Counselling',
+  'School Counsellor': 'Psychology & Counselling',
+  'Social Worker': 'Sociology & Social Work',
+  'PR Manager': 'Public Relations & Comms',
+  'Graphic Designer': 'Fine Arts & Design',
+  'Senior Graphic Designer': 'Fine Arts & Design',
+}
+
 export function careerAreaFromWorkRoleTitle(roleTitle) {
   const raw = String(roleTitle || '').trim()
   if (!raw) return null
+  if (HUMANITIES_TITLE_OVERRIDES[raw]) return HUMANITIES_TITLE_OVERRIDES[raw]
   if (ROLE_TITLE_TO_CAREER_AREA[raw]) return ROLE_TITLE_TO_CAREER_AREA[raw]
   const norm = raw.toLowerCase().replace(/\s+/g, ' ')
   for (const [title, area] of Object.entries(ROLE_TITLE_TO_CAREER_AREA)) {

@@ -28,6 +28,16 @@ function defaultYearsAndSalForInference(ind) {
     'Business Analytics': { tradYrs: 7, fastYrs: 5, accelYrs: 3, sal: '₹50–95k' },
     'Data Science': { tradYrs: 8, fastYrs: 5, accelYrs: 4, sal: '₹65–130k' },
     Strategy: { tradYrs: 9, fastYrs: 7, accelYrs: 5, sal: '₹80–150k' },
+    'Education & Teaching': { tradYrs: 8, fastYrs: 5, accelYrs: 3, sal: '₹35–85k' },
+    'Academic Research': { tradYrs: 9, fastYrs: 6, accelYrs: 4, sal: '₹30–75k' },
+    'Content & Creative Writing': { tradYrs: 6, fastYrs: 4, accelYrs: 2, sal: '₹35–80k' },
+    'Journalism & Media': { tradYrs: 8, fastYrs: 5, accelYrs: 3, sal: '₹30–70k' },
+    'Psychology & Counselling': { tradYrs: 7, fastYrs: 5, accelYrs: 3, sal: '₹35–75k' },
+    'Sociology & Social Work': { tradYrs: 7, fastYrs: 5, accelYrs: 3, sal: '₹25–55k' },
+    'Economics & Research': { tradYrs: 8, fastYrs: 5, accelYrs: 4, sal: '₹45–95k' },
+    'Fine Arts & Design': { tradYrs: 7, fastYrs: 5, accelYrs: 3, sal: '₹30–70k' },
+    'Music & Performing Arts': { tradYrs: 8, fastYrs: 6, accelYrs: 4, sal: '₹25–65k' },
+    'Public Relations & Comms': { tradYrs: 8, fastYrs: 5, accelYrs: 3, sal: '₹40–90k' },
   }
   return map[ind] || { tradYrs: 8, fastYrs: 5, accelYrs: 4, sal: '₹45–85k' }
 }

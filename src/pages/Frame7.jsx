@@ -142,7 +142,6 @@ export function Frame7() {
     spec?.anchorUni ||
     '—'
 
-  // eslint-disable-next-line no-unused-vars -- wired up when download UI is re-enabled
   const handleDownloadRoadmap = async () => {
     if (!spec || !reportData || roadmapPdfLoading || !reportRef.current) return
     setRoadmapPdfLoading(true)
@@ -280,7 +279,6 @@ export function Frame7() {
                     </div>
                   ))}
                 </div>
-                {/* Download roadmap — re-enable when ready
                 <div className="mt-4 border-t border-dashed border-[rgba(0,0,0,.1)] pt-4">
                   <div className="mb-1 text-[14px] font-[700] text-[#0C0C0C]">Download roadmap</div>
                   <p className="mb-3 text-[11px] leading-[1.5] text-[#666]">
@@ -296,7 +294,6 @@ export function Frame7() {
                     {roadmapPdfLoading ? 'Generating PDF…' : '⬇ Download Career Pass'}
                   </Button>
                 </div>
-                */}
 
               </div>
 

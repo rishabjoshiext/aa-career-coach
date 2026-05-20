@@ -10,6 +10,20 @@ function normalizeRole(t) {
 const EXEC_PATTERN =
   /\b(coo|ceo|cto|cio|cfo|cpo|chief|evp|svp|vp|vice president|director|head of|zonal head|president)\b/i
 
+/** Fresher / placeholder titles — treat as pre-career for ladder filtering. */
+const GENERIC_CURRENT_RE =
+  /^(current role|your goal|career destination|fresher|student|graduate|intern|trainee)$/i
+
+/** IC titles ending in "Executive" (not leadership). Must run before generic "executive" rule. */
+const IC_EXECUTIVE_RE =
+  /\b(sales|marketing|business development|bd|account|field|inside|pre[- ]?sales|channel|territory|relationship|customer|client|brand|media|category|trade|commercial|insurance|wealth|credit)\s+executive\b/i
+
+/** @param {string} roleTitle */
+export function isGenericCurrentRole(roleTitle) {
+  const t = normalizeRole(roleTitle).toLowerCase()
+  return !t || GENERIC_CURRENT_RE.test(t)
+}
+
 /** @param {string} roleTitle */
 export function inferSeniorityRank(roleTitle) {
   const t = normalizeRole(roleTitle).toLowerCase()
@@ -17,12 +31,14 @@ export function inferSeniorityRank(roleTitle) {
   if (/\b(vp|vice president|evp|svp|zonal head)\b/.test(t)) return 8
   if (/\b(director|head of)\b/.test(t)) return 7
   if (/\b(regional|national|global)\s+.*(manager|head|lead)\b/.test(t)) return 6
-  if (/\b(senior|sr\.?)\s+(manager|engineer|analyst|consultant|specialist)\b/.test(t)) return 5
+  if (/\b(senior|sr\.?)\s+(manager|engineer|analyst|consultant|specialist|executive)\b/.test(t)) return 5
   if (/\b(principal|staff)\b/.test(t)) return 5
   if (/\b(lead)\b/.test(t) && !/\bteam lead\b/.test(t)) return 5
   if (/\bmanager\b/.test(t)) return 4
   if (/\b(specialist|analyst)\b/.test(t)) return 3
   if (/\b(associate)\b/.test(t)) return 2
+  if (IC_EXECUTIVE_RE.test(t)) return 2
+  if (/\b(bdr|sdr)\b/.test(t)) return 1
   if (/\b(executive|coordinator|representative|receptionist|assistant)\b/.test(t)) return 1
   return 2
 }
@@ -47,7 +63,7 @@ export function destinationAllowsExecutiveSteps(targetRole) {
  * @param {string} targetRole
  */
 export function filterRolesForHierarchy(roles, currentRole, targetRole) {
-  const currentRank = inferSeniorityRank(currentRole)
+  const currentRank = isGenericCurrentRole(currentRole) ? 0 : inferSeniorityRank(currentRole)
   const targetRank = inferSeniorityRank(targetRole)
   const allowExec = destinationAllowsExecutiveSteps(targetRole)
 
